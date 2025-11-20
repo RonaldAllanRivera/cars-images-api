@@ -39,6 +39,28 @@ class CarImageSearchService
         ]);
     }
 
+    public function findExistingCompletedSearch(
+        string $make,
+        ?string $model,
+        int $fromYear,
+        int $toYear,
+        ?string $color,
+        bool $transparent,
+        int $imagesPerYear = 10
+    ): ?CarSearch {
+        return CarSearch::query()
+            ->where('make', $make)
+            ->where('model', $model)
+            ->where('from_year', $fromYear)
+            ->where('to_year', $toYear)
+            ->where('color', $color)
+            ->where('transparent_background', $transparent)
+            ->where('images_per_year', $imagesPerYear)
+            ->where('status', 'completed')
+            ->latest('created_at')
+            ->first();
+    }
+
     public function runSearch(CarSearch $search): Collection
     {
         $results = collect();
