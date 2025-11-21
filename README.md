@@ -7,6 +7,87 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Cars Images API (Wikimedia + Filament 4)
+
+This project is an internal **Cars Images API** built on **Laravel 12** and **Filament 4**. It integrates with **Wikimedia Commons** to search and cache high-resolution car images based on:
+
+- **Make** and optional **model**
+- **FROM YEAR / TO YEAR** range (multiple years)
+- Optional **color**
+- Optional **transparent background** preference
+
+For each year in the selected range, the system queries Wikimedia (up to a configurable number of images per year), stores normalized metadata in the database, and exposes the results through a Filament admin panel.
+
+### Key features
+
+- Filament 4 admin panel at `/admin`
+- Car image searches stored in `car_searches` with status tracking (`pending`, `running`, `completed`, `failed`)
+- Image metadata stored in `car_images` (provider IDs, URLs, size, license, attribution, etc.)
+- **DB-backed reuse** of identical searches to avoid hitting Wikimedia more than necessary
+- Configurable Wikimedia integration via `config/images.php` and `.env`
+- Dedicated `cars` storage disk for future downloaded image files
+
+### Technology stack
+
+- Laravel 12 (PHP 8.2+)
+- Filament 4 admin panel
+- MediaWiki/Wikimedia Commons API
+- MySQL (Laragon) for persistence
+
+### Local setup (Laragon)
+
+1. Clone the repository into your Laragon `www` directory, e.g. `C:\laragon\www\cars-images-api`.
+2. Install dependencies:
+
+   ```bash
+   composer install
+   ```
+
+3. Configure `.env` (database, app URL, Wikimedia settings). Example:
+
+   ```env
+   APP_URL=http://cars-images-api.test
+
+   DB_CONNECTION=mysql
+   DB_HOST=127.0.0.1
+   DB_PORT=3306
+   DB_DATABASE=cars-images-api
+   DB_USERNAME=root
+   DB_PASSWORD=
+
+   QUEUE_CONNECTION=sync
+
+   WIKIMEDIA_BASE_URL=https://commons.wikimedia.org/w/api.php
+   WIKIMEDIA_TIMEOUT=10
+   WIKIMEDIA_RETRY_TIMES=3
+   WIKIMEDIA_RETRY_SLEEP_MS=200
+   WIKIMEDIA_USER_AGENT="CarsImagesApi/1.0 (Laravel)"
+   WIKIMEDIA_CACHE_TTL=3600
+   ```
+
+4. Run migrations and seed the Filament admin user (if you have a seeder):
+
+   ```bash
+   php artisan migrate --seed
+   ```
+
+5. Ensure the storage symlink exists:
+
+   ```bash
+   php artisan storage:link
+   ```
+
+6. Serve the app (or let Laragon handle it) and visit:
+
+   - Filament admin: `http://cars-images-api.test/admin`
+   - Car Image Searches: `http://cars-images-api.test/admin/car-searches`
+
+### Current limitations / next steps
+
+- Searches currently run synchronously (`QUEUE_CONNECTION=sync`). A background queue worker can be introduced later.
+- Download and export flows (bulk download to `cars` disk, CSV export) are planned but not implemented yet.
+- Rate limiting, richer logging, and automated tests are still to be added.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

@@ -292,3 +292,30 @@ This structure lets you:
 6. **Phase 6 – Hardening**
    - Add validations, rate limiting, detailed logging, and error screens in Filament.
    - Write and run tests, prepare documentation for employers on how to use the system.
+
+---
+
+## 12. Current Implementation Status
+
+- **Phase 1 – Foundation**
+  - Completed. Laravel 12 and Filament 4 are installed and configured. `car_searches` and `car_images` tables and models exist, and a `cars` filesystem disk is configured.
+
+- **Phase 2 – Wikimedia Client & Services**
+  - Completed. `WikimediaClient` calls the MediaWiki API, normalizes image data, and caches by query. `CarImageSearchService` coordinates multi-year searches and stores `CarImage` records.
+  - Additional: `findExistingCompletedSearch()` provides DB-backed reuse of identical searches to avoid repeated Wikimedia calls.
+
+- **Phase 3 – Jobs & Queues**
+  - `RunCarSearchJob` implemented and used when creating new searches.
+  - Currently running synchronously via `QUEUE_CONNECTION=sync` for local development instead of a background worker.
+  - `FetchWikimediaCarImagesForYearJob` and `DownloadCarImagesJob` still to be implemented.
+
+- **Phase 4 – Filament Admin UI**
+  - `CarSearchResource` and `CarImageResource` created using Filament 4 APIs.
+  - Create page for `CarSearch` acts as the "Car Image Search" form, with reuse-or-create logic and status tracking.
+  - Relation manager shows images per search; a separate `Car Images` listing is available in the navigation.
+
+- **Phase 5 – Download & Export**
+  - Not yet implemented. No download job or bulk actions for downloading/exporting images.
+
+- **Phase 6 – Hardening**
+  - Partially planned but not implemented. Retries, basic validation, and caching exist, but rate limiting, logging/metrics, and automated tests are still to be added.
