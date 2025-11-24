@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\CarSearchResource\RelationManagers;
 
+use App\Models\CarImage;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Actions;
 use Filament\Tables;
@@ -17,7 +18,16 @@ class CarImagesRelationManager extends RelationManager
             ->columns([
                 Tables\Columns\ImageColumn::make('thumbnail_url')
                     ->label('Image')
-                    ->square(),
+                    ->square()
+                    ->action(
+                        Actions\Action::make('previewImage')
+                            ->modalHeading('Image preview')
+                            ->modalContent(fn (CarImage $record) => view('filament.components.car-image-preview', [
+                                'imageUrl' => $record->thumbnail_url ?? $record->source_url,
+                                'sourceUrl' => $record->source_url,
+                                'title' => $record->title,
+                            ]))
+                    ),
                 Tables\Columns\TextColumn::make('year')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('color')
@@ -32,6 +42,15 @@ class CarImagesRelationManager extends RelationManager
             ->filters([])
             ->headerActions([])
             ->actions([
+                Actions\Action::make('preview')
+                    ->label('Preview')
+                    ->icon('heroicon-o-magnifying-glass-plus')
+                    ->modalHeading('Image preview')
+                    ->modalContent(fn (CarImage $record) => view('filament.components.car-image-preview', [
+                        'imageUrl' => $record->thumbnail_url ?? $record->source_url,
+                        'sourceUrl' => $record->source_url,
+                        'title' => $record->title,
+                    ])),
                 Actions\DeleteAction::make(),
             ])
             ->bulkActions([
