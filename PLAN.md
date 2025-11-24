@@ -194,7 +194,7 @@ This structure lets you:
    - Table columns: make, model, from_year, to_year, color, transmission, transparent, status, requested_by, created_at.
    - Actions:
      - View details: show parameters and related `CarImage` records.
-     - Re-run search (dispatch `RunCarSearchJob` again).
+     - Refresh from Wikimedia: delete existing images for the search, clear cached Wikimedia responses for its years, and re-run the search with the latest filters.
 
 2. **CarImageResource**
    - Table columns:
@@ -209,8 +209,9 @@ This structure lets you:
      - By transmission.
      - By download status.
    - Bulk actions:
-     - Download selected.
-     - Export selected.
+     - Delete selected images.
+     - Download selected. *(planned)*
+     - Export selected. *(planned)*
 
 3. **Custom Filament Page: "Car Image Search"**
    - A form-driven page (outside the standard resource CRUD) optimised for triggering new searches.
@@ -305,7 +306,7 @@ This structure lets you:
   - Completed. Laravel 12 and Filament 4 are installed and configured. `car_searches` and `car_images` tables and models exist, and a `cars` filesystem disk is configured.
 
 - **Phase 2 – Wikimedia Client & Services**
-  - Completed. `WikimediaClient` calls the MediaWiki API, normalizes image data, and caches by query. Search queries now also include **transmission** when provided, and a lightweight content filter attempts to drop obvious non-car images (e.g. flowers / plants).
+  - Completed. `WikimediaClient` calls the MediaWiki API, normalizes image data, and caches by query. Search queries now also include **transmission** when provided, and a lightweight content filter attempts to drop obvious non-car images (e.g. flowers / plants and clearly non-car academic/journal pages such as psychology / neuroscience articles).
   - `CarImageSearchService` coordinates multi-year searches and stores `CarImage` records.
   - Additional: `findExistingCompletedSearch()` provides DB-backed reuse of identical searches to avoid repeated Wikimedia calls.
 
@@ -315,8 +316,9 @@ This structure lets you:
 
 - **Phase 4 – Filament Admin UI**
   - `CarSearchResource` and `CarImageResource` created using Filament 4 APIs.
-  - Create page for `CarSearch` acts as the "Car Image Search" form, with dynamic make/model selects, year range, color, transmission, transparent flag, and images-per-year fields, plus reuse-or-create logic and status tracking.
-  - Relation manager shows images per search; a separate `Car Images` listing is available in the navigation.
+  - Create page for `CarSearch` acts as the "Car Image Search" form, with dynamic make/model selects, year range, and optional color/transmission filters (via "All ..." options), a transparent flag, and images-per-year fields, plus reuse-or-create logic and status tracking.
+  - Relation manager shows images per search; a separate `Car Images` listing is available in the navigation. Both views provide per-row and bulk **Delete** actions so admins can clean up incorrect images.
+  - `ViewCarSearch` exposes a **Refresh from Wikimedia** header action that removes existing images for the search, clears cached Wikimedia responses for its years, and re-runs the search synchronously with the latest filters.
   - Both Car Searches and Car Images tables default to **100 rows per page** with adjustable pagination options.
 
 - **Phase 5 – Download & Export**
@@ -324,3 +326,25 @@ This structure lets you:
 
 - **Phase 6 – Hardening**
   - Partially planned but not implemented. Retries, basic validation, and caching exist, but rate limiting, logging/metrics, and automated tests are still to be added.
+
+---
+
+## 13. Optional AI-based filtering (future)
+
+- **When OpenAI might make sense**
+  - Consider integrating OpenAI (or a similar model) only if:
+    - You still get many wrong images even after improving keyword filters.
+    - Or you need very high precision (for example: "front 3/4 view, no people, white background").
+
+- **Pattern for using AI in `WikimediaClient::isCarImage()`**
+  - First run cheap keyword-based filters as the primary decision mechanism.
+  - For "ambiguous" cases, optionally send **title + description + categories** to an AI model to classify as **car / not car**.
+  - Cache AI decisions aggressively (for example, per `provider_image_id`) to avoid paying repeatedly for the same image.
+  - Do not hard-fail the entire search if the AI provider is down; fall back to heuristic-only filtering.
+
+- **Best practices if you add OpenAI**
+  - Put the API key in `.env` (for example `OPENAI_API_KEY`), never in source code.
+  - Wrap calls in a dedicated service class, for example `App\Services\Images\ImageClassifier`.
+  - Add timeouts, retries, and logging around AI calls.
+  - Only send text metadata (title, description, categories) unless you explicitly need vision models, which are slower and more expensive.
+

@@ -15,6 +15,7 @@ It is designed as an internal tool and portfolio project to demonstrate:
 - **Car-focused Wikimedia search**
   - Query Wikimedia Commons for images by make, model, year range, color, transmission, and transparent background.
   - Multi‑year searches: one request per year in the range.
+  - Flexible filters: "All models", "All colors", and "All transmissions" options let you widen or narrow searches quickly.
 - **Dynamic search form**
   - Make and model are linked: when you select a make, the model dropdown updates with relevant models.
   - Popular makes and models preconfigured for fast searches.
@@ -22,11 +23,11 @@ It is designed as an internal tool and portfolio project to demonstrate:
   - Searches are stored in `car_searches` and associated images in `car_images`.
   - Identical completed searches are reused instead of hitting Wikimedia again.
 - **Result quality filter**
-  - Lightweight filter that tries to drop obvious non‑car images (e.g. flowers / plants) using image title, description, and categories.
+  - Lightweight filter that tries to drop obvious non‑car images (e.g. flowers / plants, or clearly non-car academic/journal pages) using image title, description, categories, and metadata.
 - **Filament admin experience**
   - Dedicated navigation group for Cars.
-  - Car Searches and Car Images tables with sortable, searchable columns.
-  - Tables default to **100 rows per page** for efficient review.
+  - Car Searches and Car Images tables with sortable, searchable columns and default **100 rows per page** for efficient review.
+  - Per-row and bulk **Delete** actions for images, and a **Refresh from Wikimedia** action on each search to clear images + cache and re-run with the latest filters.
 
 ---
 
@@ -207,13 +208,25 @@ After this, you can continue development on the new PC and push/pull as normal.
 1. Sign in to Filament at `/admin`.
 2. Navigate to **Cars → Car Image Searches** and click **Create**.
 3. Use the form:
-   - Choose a **Make** – the **Model** dropdown automatically updates to show popular models for that make.
+   - Choose a **Make** – the **Model** dropdown automatically updates to show popular models for that make, with an **All models** option to search across models.
    - Set **From year / To year** (the service normalizes the range if they are reversed).
-   - Optionally pick a **Color** and **Transmission**.
+   - Optionally pick a **Color** and **Transmission**, or leave them on **All colors** / **All transmissions** to avoid filtering by those fields.
    - Toggle **Transparent background** and adjust **Images per year**.
 4. Submit the form.
    - The app calls the Wikimedia API for each year, filters results to likely car images, stores them in `car_images`, and redirects to the search **View** page.
 5. On the **View** page, scroll to the **Images** relation to see thumbnails and metadata.
+
+### Refreshing a search from Wikimedia
+
+- From a search view page (**Cars → Car Image Searches → View**), use **Refresh from Wikimedia** in the header actions to:
+  - Delete existing images for that search.
+  - Clear cached Wikimedia responses for its years.
+  - Re-run the search synchronously using the current filters.
+
+### Cleaning up incorrect images
+
+- From **Cars → Car Images**, use the per-row **Delete** action or the bulk **Delete selected** action to remove bad images.
+- From a specific search's **Images** relation, you can also delete individual or multiple images using the same delete actions.
 
 ### Browsing cached images
 
@@ -224,7 +237,8 @@ After this, you can continue development on the new PC and push/pull as normal.
 
 - The **first** time you run a make/model/year/color/transmission combination, the app calls Wikimedia and caches the results in the database.
 - Subsequent searches with the **same parameters** reuse the existing completed `CarSearch` and its `CarImage` records instead of calling Wikimedia again.
-- The Wikimedia client applies a simple filter to drop obvious non-car images (e.g. flowers / plants) using title, description, and category metadata.
+- The Wikimedia client applies a lightweight filter to drop obvious non-car images (e.g. flowers / plants, or clearly non-car academic/journal pages) using title, description, categories, and other metadata.
+- Using **Refresh from Wikimedia** invalidates both the cached images and the underlying Wikimedia cache for that search's years, so new results are fetched with the current filters.
 
 ---
 
@@ -233,5 +247,6 @@ After this, you can continue development on the new PC and push/pull as normal.
 - Switch from synchronous to asynchronous queue processing in non‑local environments.
 - Implement bulk download to the `cars` storage disk and CSV export of selected images.
 - Add stronger rate limiting, richer logging/metrics, and automated tests.
+- Explore optional AI-based filtering for ambiguous results (see `PLAN.md` section on AI-based filtering).
 
 

@@ -168,6 +168,21 @@ class WikimediaClient
         return 'wikimedia_cars_'.md5($query.'|'.$limit);
     }
 
+    public function clearSearchCache(
+        string $make,
+        ?string $model,
+        int $year,
+        ?string $color,
+        ?string $transmission,
+        bool $transparent,
+        int $limit = 10
+    ): void {
+        $query = $this->buildQuery($make, $model, $year, $color, $transmission, $transparent);
+        $cacheKey = $this->cacheKey($query, $limit);
+
+        Cache::forget($cacheKey);
+    }
+
     protected function isCarImage(array $image): bool
     {
         $title = strtolower((string) ($image['title'] ?? ''));
@@ -178,7 +193,21 @@ class WikimediaClient
         $categories = strtolower((string) ($extmetadata['Categories']['value'] ?? ''));
 
         // Quick negative filter: exclude obvious non-car subjects like flowers and plants.
-        foreach (['flower', 'flowers', 'blossom', 'plant', 'tree', 'garden'] as $negative) {
+        foreach ([
+            'flower',
+            'flowers',
+            'blossom',
+            'plant',
+            'tree',
+            'garden',
+            'psychology',
+            'neuroscience',
+            'cognitive',
+            'royal society',
+            'open science',
+            'journal',
+            'article',
+        ] as $negative) {
             if (str_contains($title, $negative) || str_contains($description, $negative) || str_contains($categories, $negative)) {
                 return false;
             }

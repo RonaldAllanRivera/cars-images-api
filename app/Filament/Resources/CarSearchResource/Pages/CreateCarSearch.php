@@ -13,16 +13,24 @@ class CreateCarSearch extends CreateRecord
 
     protected function handleRecordCreation(array $data): Model
     {
+        $normalize = static function ($value): ?string {
+            if ($value === '' || $value === '__all__') {
+                return null;
+            }
+
+            return $value ?? null;
+        };
+
         $service = app(CarImageSearchService::class);
         $user = auth()->user();
 
         $existing = $service->findExistingCompletedSearch(
             $data['make'],
-            $data['model'] ?? null,
+            $normalize($data['model'] ?? null),
             (int) $data['from_year'],
             (int) $data['to_year'],
-            $data['color'] ?? null,
-            $data['transmission'] ?? null,
+            $normalize($data['color'] ?? null),
+            $normalize($data['transmission'] ?? null),
             (bool) ($data['transparent_background'] ?? false),
             (int) ($data['images_per_year'] ?? 10),
         );
@@ -34,11 +42,11 @@ class CreateCarSearch extends CreateRecord
         $search = $service->createSearch(
             $user,
             $data['make'],
-            $data['model'] ?? null,
+            $normalize($data['model'] ?? null),
             (int) $data['from_year'],
             (int) $data['to_year'],
-            $data['color'] ?? null,
-            $data['transmission'] ?? null,
+            $normalize($data['color'] ?? null),
+            $normalize($data['transmission'] ?? null),
             (bool) ($data['transparent_background'] ?? false),
             (int) ($data['images_per_year'] ?? 10),
         );

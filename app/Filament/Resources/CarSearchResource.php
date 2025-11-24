@@ -40,8 +40,12 @@ class CarSearchResource extends Resource
                 ->searchable(),
             Forms\Components\Select::make('model')
                 ->options(function (Get $get): array {
-                    return static::getModelOptionsForMake($get('make'));
+                    $models = static::getModelOptionsForMake($get('make'));
+
+                    // `__all__` is treated as "no model filter" in CreateCarSearch.
+                    return ['__all__' => 'All models'] + $models;
                 })
+                ->default('__all__')
                 ->searchable()
                 ->nullable(),
             Forms\Components\TextInput::make('from_year')
@@ -58,6 +62,7 @@ class CarSearchResource extends Resource
                 ->maxValue((int) date('Y') + 1),
             Forms\Components\Select::make('color')
                 ->options([
+                    '__all__' => 'All colors',
                     'red' => 'Red',
                     'white' => 'White',
                     'black' => 'Black',
@@ -66,15 +71,18 @@ class CarSearchResource extends Resource
                     'grey' => 'Grey',
                     'green' => 'Green',
                     'yellow' => 'Yellow',
-                ])->default('red')
+                ])
+                ->default('__all__')
                 ->searchable()
                 ->nullable(),
             Forms\Components\Select::make('transmission')
                 ->options([
+                    '__all__' => 'All transmissions',
                     'Automatic' => 'Automatic',
                     'Manual' => 'Manual',
                     'CVT' => 'CVT',
-                ])->default('Automatic')
+                ])
+                ->default('__all__')
                 ->searchable()
                 ->nullable(),
             Forms\Components\Toggle::make('transparent_background')

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\CarSearchResource\RelationManagers;
 
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Actions;
 use Filament\Tables;
 use Filament\Tables\Table;
 
@@ -30,7 +31,11 @@ class CarImagesRelationManager extends RelationManager
             ])
             ->filters([])
             ->headerActions([])
-            ->actions([])
-            ->bulkActions([]);
+            ->actions([
+                Actions\DeleteAction::make(),
+            ])
+            ->bulkActions([
+                Actions\DeleteBulkAction::make(),
+            ]);
     }
 }

@@ -4,7 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Implement image download job and bulk download/export actions in Filament.
+### Added
+
+- "All models", "All colors", and "All transmissions" options on the Car Image Search form so users can easily widen or narrow searches.
+- Per-row and bulk **Delete** actions for car images in Filament, both on the global **Car Images** listing and on each search's **Images** relation.
+- **Refresh from Wikimedia** header action on the Car Search view page that deletes existing images for the search, clears cached Wikimedia responses for its years, and re-runs the search with the latest filtering rules.
+- Documentation for optional AI-based filtering of ambiguous results, and for environment configuration via `.env.example`.
+
+### Changed
+
+- `WikimediaClient` car-image filter expanded to drop obviously non-car academic/journal pages (e.g. psychology / neuroscience articles) in addition to plant/flower content, based on title, description, and category metadata.
+- `PLAN.md` and `README.md` updated to describe the refreshed admin UI (delete actions, Refresh from Wikimedia, All-* options) and the improved filtering and future AI plan.
+
+### Planned
+
+- Implement image download job wiring and bulk download/export actions in Filament.
 - Add rate limiting, detailed logging/metrics, and automated tests.
 
 ## [0.2.0] - 2025-11-21

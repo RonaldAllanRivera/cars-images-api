@@ -90,6 +90,27 @@ class CarImageSearchService
         return $results;
     }
 
+    public function refreshSearch(CarSearch $search): Collection
+    {
+        CarImage::where('car_search_id', $search->id)->delete();
+
+        $years = range($search->from_year, $search->to_year);
+
+        foreach ($years as $year) {
+            $this->wikimedia->clearSearchCache(
+                $search->make,
+                $search->model,
+                $year,
+                $search->color,
+                $search->transmission,
+                $search->transparent_background,
+                $search->images_per_year,
+            );
+        }
+
+        return $this->runSearch($search->fresh());
+    }
+
     public function fetchAndStoreForYear(CarSearch $search, int $year, int $limit): Collection
     {
         $images = $this->wikimedia->searchCars(

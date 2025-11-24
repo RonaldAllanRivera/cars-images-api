@@ -6,6 +6,7 @@ use App\Filament\Resources\CarImageResource\Pages;
 use App\Models\CarImage;
 use BackedEnum;
 use UnitEnum;
+use Filament\Actions;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -45,8 +46,12 @@ class CarImageResource extends Resource
                     ->sortable(),
             ])
             ->filters([])
-            ->actions([])
-            ->bulkActions([])
+            ->actions([
+                Actions\DeleteAction::make(),
+            ])
+            ->bulkActions([
+                Actions\DeleteBulkAction::make(),
+            ])
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(100);
     }
