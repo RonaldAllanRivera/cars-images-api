@@ -173,15 +173,17 @@ This structure lets you:
 ## 6. Download Flow
 
 1. From Filament tables, user can select individual or multiple images.
-2. Provide a **bulk action** "Download selected".
-3. The action dispatches `DownloadCarImagesJob` (for one or many image IDs).
-4. `DownloadCarImagesJob`:
+2. Provide a **bulk action** "Download selected" that streams a ZIP file of the selected images directly to the admin's browser:
+   - Prefer already-downloaded files on the `cars` disk when `download_path` is set.
+   - Otherwise fetch each image from `source_url` using the configured Wikimedia user agent.
+   - Update `download_status` to `downloaded` for successfully included images.
+3. Keep `DownloadCarImagesJob` available for future background workflows that download images to the `cars` disk without immediately sending them to the browser:
    - Uses `Storage::disk('cars')` (configured in `config/filesystems.php`).
    - Downloads the image from `source_url`.
    - Saves as a deterministic path, e.g. `make/model/year/{hash}.jpg`.
    - Updates `download_status` and `download_path`.
    - Handles HTTP errors, timeouts, and disk failures with retries.
-5. Optionally add another bulk action:
+4. Optionally add another bulk action:
    - "Export URLs" to CSV with columns: make, model, year, license, attribution, source URL, local path.
 
 ---
@@ -210,7 +212,7 @@ This structure lets you:
      - By download status.
    - Bulk actions:
      - Delete selected images.
-     - Download selected. *(planned)*
+     - Download selected (streams selected images as a ZIP archive to the admin's browser).
      - Export selected. *(planned)*
    - Row actions:
      - Preview image in a modal (larger thumbnail with metadata and source link).
@@ -325,7 +327,7 @@ This structure lets you:
   - Both Car Searches and Car Images tables default to **100 rows per page** with adjustable pagination options.
 
 - **Phase 5 – Download & Export**
-  - Partially implemented. Single-image downloads are available from the preview modal via an internal download endpoint that streams the provider image and marks `download_status` as `downloaded`, but bulk download/export actions wired through `DownloadCarImagesJob` from Filament are still pending.
+  - Partially implemented. Single-image downloads are available from the preview modal via an internal download endpoint that streams the provider image and marks `download_status` as `downloaded`, and a bulk **Download selected** ZIP action streams selected images directly to the admin's browser. Disk-backed bulk downloads via `DownloadCarImagesJob` and CSV export actions from Filament are still pending.
 
 - **Phase 6 – Hardening**
   - Partially planned but not implemented. Retries, basic validation, and caching exist, but rate limiting, logging/metrics, and automated tests are still to be added.

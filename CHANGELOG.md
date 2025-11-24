@@ -9,6 +9,16 @@ All notable changes to this project will be documented in this file.
 - Implement image download job wiring and bulk download/export actions in Filament.
 - Add rate limiting, detailed logging/metrics, and automated tests.
 
+## [0.4.0] - 2025-11-24
+
+### Added
+
+- Bulk **Download selected** ZIP action for car images (global Car Images listing and per-search Images relation) that streams the selected images as a single ZIP archive to the admin's browser.
+
+### Changed
+
+- Bulk ZIP download filenames now include the image ID so multiple images with the same make/model/year do not overwrite each other inside the archive.
+
 ## [0.3.0] - 2025-11-24
 
 ### Added

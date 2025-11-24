@@ -94,6 +94,16 @@ class CarImageResource extends Resource
                 Actions\DeleteAction::make(),
             ])
             ->bulkActions([
+                Actions\BulkAction::make('downloadSelected')
+                    ->label('Download selected')
+                    ->icon('heroicon-o-arrow-down-tray')
+                    ->color('primary')
+                    ->tooltip('The more images are selected, the slower the download.')
+                    ->action(function ($records) {
+                        $service = app(\App\Services\Images\CarImageZipService::class);
+
+                        return $service->downloadZip($records);
+                    }),
                 Actions\DeleteBulkAction::make(),
             ])
             ->paginated([10, 25, 50, 100])
