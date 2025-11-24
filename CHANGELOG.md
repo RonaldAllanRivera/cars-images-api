@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Per-row and bulk **Delete** actions for car images in Filament, both on the global **Car Images** listing and on each search's **Images** relation.
 - **Refresh from Wikimedia** header action on the Car Search view page that deletes existing images for the search, clears cached Wikimedia responses for its years, and re-runs the search with the latest filtering rules.
 - Documentation for optional AI-based filtering of ambiguous results, and for environment configuration via `.env.example`.
+ - Image preview modal for car images (clickable thumbnails and Preview action) with larger 400px image, source URL, and title, plus a Download button that streams the image via an internal download endpoint.
 
 ### Changed
 

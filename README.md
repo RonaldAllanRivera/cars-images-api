@@ -27,7 +27,7 @@ It is designed as an internal tool and portfolio project to demonstrate:
 - **Filament admin experience**
   - Dedicated navigation group for Cars.
   - Car Searches and Car Images tables with sortable, searchable columns and default **100 rows per page** for efficient review.
-  - Per-row and bulk **Delete** actions for images, and a **Refresh from Wikimedia** action on each search to clear images + cache and re-run with the latest filters.
+  - Per-row and bulk **Delete** actions for images, a **Refresh from Wikimedia** action on each search to clear images + cache and re-run with the latest filters, and a fast image **Preview** modal with direct **Download** button.
 
 ---
 
@@ -227,6 +227,12 @@ After this, you can continue development on the new PC and push/pull as normal.
 
 - From **Cars → Car Images**, use the per-row **Delete** action or the bulk **Delete selected** action to remove bad images.
 - From a specific search's **Images** relation, you can also delete individual or multiple images using the same delete actions.
+
+### Previewing and downloading images
+
+- From **Cars → Car Images** or a search's **Images** relation:
+  - Click a thumbnail or the **Preview** action to open a modal with a larger image (up to ~400×400), source URL, and title.
+  - Use the **Download** button in the modal footer to download the full image via an internal download endpoint.
 
 ### Browsing cached images
 

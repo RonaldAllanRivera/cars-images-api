@@ -212,6 +212,9 @@ This structure lets you:
      - Delete selected images.
      - Download selected. *(planned)*
      - Export selected. *(planned)*
+   - Row actions:
+     - Preview image in a modal (larger thumbnail with metadata and source link).
+     - Download single image immediately via an internal download endpoint that streams the provider image to the browser.
 
 3. **Custom Filament Page: "Car Image Search"**
    - A form-driven page (outside the standard resource CRUD) optimised for triggering new searches.

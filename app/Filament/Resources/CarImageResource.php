@@ -36,6 +36,16 @@ class CarImageResource extends Resource
                                 'sourceUrl' => $record->source_url,
                                 'title' => $record->title,
                             ]))
+                            ->modalSubmitAction(false)
+                            ->modalCancelAction(fn ($action) => $action->label('Close'))
+                            ->extraModalFooterActions([
+                                Actions\Action::make('download')
+                                    ->label('Download')
+                                    ->icon('heroicon-o-arrow-down-tray')
+                                    ->color('primary')
+                                    ->url(fn (CarImage $record) => route('car-images.download', $record))
+                                    ->openUrlInNewTab(),
+                            ])
                     ),
                 Tables\Columns\TextColumn::make('make')
                     ->sortable()
@@ -64,7 +74,17 @@ class CarImageResource extends Resource
                         'imageUrl' => $record->thumbnail_url ?? $record->source_url,
                         'sourceUrl' => $record->source_url,
                         'title' => $record->title,
-                    ])),
+                    ]))
+                    ->modalSubmitAction(false)
+                    ->modalCancelAction(fn ($action) => $action->label('Close'))
+                    ->extraModalFooterActions([
+                        Actions\Action::make('download')
+                            ->label('Download')
+                            ->icon('heroicon-o-arrow-down-tray')
+                            ->color('primary')
+                            ->url(fn (CarImage $record) => route('car-images.download', $record))
+                            ->openUrlInNewTab(),
+                    ]),
                 Actions\DeleteAction::make(),
             ])
             ->bulkActions([
