@@ -37,6 +37,11 @@ class CarImageDownloadController
         $content = $response->body();
         $contentType = $response->header('Content-Type', 'application/octet-stream');
 
+        // Mark this image as downloaded at least once by an admin.
+        $carImage->forceFill([
+            'download_status' => 'downloaded',
+        ])->save();
+
         $filename = $this->buildFilename($carImage, $sourceUrl, $contentType);
 
         return response()->streamDownload(function () use ($content) {

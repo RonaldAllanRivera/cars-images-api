@@ -47,6 +47,12 @@ class CarImagesRelationManager extends RelationManager
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('download_status')
                     ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'downloaded' => 'success',
+                        'downloading' => 'warning',
+                        'failed' => 'danger',
+                        default => 'gray',
+                    })
                     ->sortable(),
             ])
             ->filters([])
