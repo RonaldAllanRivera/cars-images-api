@@ -14,10 +14,11 @@ class WikimediaClient
         ?string $model,
         int $year,
         ?string $color,
+        ?string $transmission,
         bool $transparent,
         int $limit = 10
     ): Collection {
-        $query = $this->buildQuery($make, $model, $year, $color, $transparent);
+        $query = $this->buildQuery($make, $model, $year, $color, $transmission, $transparent);
 
         $cacheKey = $this->cacheKey($query, $limit);
         $ttl = (int) config('images.wikimedia.cache_ttl', 3600);
@@ -32,6 +33,7 @@ class WikimediaClient
         ?string $model,
         int $year,
         ?string $color,
+        ?string $transmission,
         bool $transparent
     ): string {
         $terms = [$make];
@@ -45,6 +47,10 @@ class WikimediaClient
 
         if ($color !== null && $color !== '') {
             $terms[] = $color;
+        }
+
+        if ($transmission !== null && $transmission !== '') {
+            $terms[] = $transmission;
         }
 
         if ($transparent) {
@@ -89,7 +95,11 @@ class WikimediaClient
                 return $this->mapPageToImage($page);
             })
             ->filter(function (array $image) {
-                return $image['source_url'] !== null;
+                if ($image['source_url'] === null) {
+                    return false;
+                }
+
+                return $this->isCarImage($image);
             })
             ->values();
     }
@@ -156,5 +166,32 @@ class WikimediaClient
     protected function cacheKey(string $query, int $limit): string
     {
         return 'wikimedia_cars_'.md5($query.'|'.$limit);
+    }
+
+    protected function isCarImage(array $image): bool
+    {
+        $title = strtolower((string) ($image['title'] ?? ''));
+        $description = strtolower(strip_tags((string) ($image['description'] ?? '')));
+
+        $metadata = $image['metadata'] ?? [];
+        $extmetadata = $metadata['imageinfo'][0]['extmetadata'] ?? [];
+        $categories = strtolower((string) ($extmetadata['Categories']['value'] ?? ''));
+
+        // Quick negative filter: exclude obvious non-car subjects like flowers and plants.
+        foreach (['flower', 'flowers', 'blossom', 'plant', 'tree', 'garden'] as $negative) {
+            if (str_contains($title, $negative) || str_contains($description, $negative) || str_contains($categories, $negative)) {
+                return false;
+            }
+        }
+
+        // Positive hints that this is a car / vehicle.
+        foreach (['car', 'cars', 'automobile', 'automobiles', 'vehicle', 'vehicles', 'sedan', 'hatchback', 'suv', 'pickup', 'coupe', 'wagon', 'convertible'] as $positive) {
+            if (str_contains($title, $positive) || str_contains($description, $positive) || str_contains($categories, $positive)) {
+                return true;
+            }
+        }
+
+        // If we can't tell, keep the image to avoid losing valid results.
+        return true;
     }
 }

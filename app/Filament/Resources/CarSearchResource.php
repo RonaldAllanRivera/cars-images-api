@@ -9,6 +9,8 @@ use BackedEnum;
 use UnitEnum;
 use Filament\Actions;
 use Filament\Forms;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
@@ -27,25 +29,57 @@ class CarSearchResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
-            Forms\Components\TextInput::make('make')
+            Forms\Components\Select::make('make')
                 ->required()
-                ->maxLength(255),
-            Forms\Components\TextInput::make('model')
-                ->maxLength(255),
+                ->options(static::getMakeOptions())
+                ->default('Toyota')
+                ->live()
+                ->afterStateUpdated(function (Set $set) {
+                    $set('model', null);
+                })
+                ->searchable(),
+            Forms\Components\Select::make('model')
+                ->options(function (Get $get): array {
+                    return static::getModelOptionsForMake($get('make'));
+                })
+                ->searchable()
+                ->nullable(),
             Forms\Components\TextInput::make('from_year')
                 ->numeric()
                 ->required()
+                ->default(2018)
                 ->minValue(1900)
                 ->maxValue((int) date('Y') + 1),
             Forms\Components\TextInput::make('to_year')
                 ->numeric()
                 ->required()
+                ->default(2022)
                 ->minValue(1900)
                 ->maxValue((int) date('Y') + 1),
-            Forms\Components\TextInput::make('color')
-                ->maxLength(255),
+            Forms\Components\Select::make('color')
+                ->options([
+                    'red' => 'Red',
+                    'white' => 'White',
+                    'black' => 'Black',
+                    'blue' => 'Blue',
+                    'silver' => 'Silver',
+                    'grey' => 'Grey',
+                    'green' => 'Green',
+                    'yellow' => 'Yellow',
+                ])->default('red')
+                ->searchable()
+                ->nullable(),
+            Forms\Components\Select::make('transmission')
+                ->options([
+                    'Automatic' => 'Automatic',
+                    'Manual' => 'Manual',
+                    'CVT' => 'CVT',
+                ])->default('Automatic')
+                ->searchable()
+                ->nullable(),
             Forms\Components\Toggle::make('transparent_background')
-                ->label('Transparent background'),
+                ->label('Transparent background')
+                ->default(false),
             Forms\Components\TextInput::make('images_per_year')
                 ->numeric()
                 ->default(10)
@@ -96,7 +130,96 @@ class CarSearchResource extends Resource
             ->actions([
                 Actions\ViewAction::make(),
             ])
-            ->bulkActions([]);
+            ->bulkActions([])
+            ->paginated([10, 25, 50, 100])
+            ->defaultPaginationPageOption(100);
+    }
+
+    protected static function getMakeOptions(): array
+    {
+        return [
+            'Toyota' => 'Toyota',
+            'Honda' => 'Honda',
+            'Tesla' => 'Tesla',
+            'Ford' => 'Ford',
+            'BMW' => 'BMW',
+            'Mercedes-Benz' => 'Mercedes-Benz',
+            'Nissan' => 'Nissan',
+            'Hyundai' => 'Hyundai',
+            'Kia' => 'Kia',
+            'Volkswagen' => 'Volkswagen',
+        ];
+    }
+
+    protected static function getModelOptionsForMake(?string $make): array
+    {
+        $all = [
+            'Toyota' => [
+                'Corolla' => 'Corolla',
+                'Camry' => 'Camry',
+                'RAV4' => 'RAV4',
+                'Hilux' => 'Hilux',
+            ],
+            'Honda' => [
+                'Civic' => 'Civic',
+                'Accord' => 'Accord',
+                'CR-V' => 'CR-V',
+                'Jazz' => 'Jazz',
+            ],
+            'Tesla' => [
+                'Model 3' => 'Model 3',
+                'Model Y' => 'Model Y',
+                'Model S' => 'Model S',
+                'Model X' => 'Model X',
+            ],
+            'Ford' => [
+                'Mustang' => 'Mustang',
+                'F-150' => 'F-150',
+                'Focus' => 'Focus',
+                'Explorer' => 'Explorer',
+            ],
+            'BMW' => [
+                '3 Series' => '3 Series',
+                '5 Series' => '5 Series',
+                'X3' => 'X3',
+                'X5' => 'X5',
+            ],
+            'Mercedes-Benz' => [
+                'A-Class' => 'A-Class',
+                'C-Class' => 'C-Class',
+                'E-Class' => 'E-Class',
+                'GLC' => 'GLC',
+            ],
+            'Nissan' => [
+                'Altima' => 'Altima',
+                'Sentra' => 'Sentra',
+                'X-Trail' => 'X-Trail',
+            ],
+            'Hyundai' => [
+                'Elantra' => 'Elantra',
+                'Tucson' => 'Tucson',
+                'Santa Fe' => 'Santa Fe',
+            ],
+            'Kia' => [
+                'Sportage' => 'Sportage',
+                'Sorento' => 'Sorento',
+                'Rio' => 'Rio',
+            ],
+            'Volkswagen' => [
+                'Golf' => 'Golf',
+                'Passat' => 'Passat',
+                'Tiguan' => 'Tiguan',
+            ],
+        ];
+
+        if ($make && isset($all[$make])) {
+            return $all[$make];
+        }
+
+        // If no make selected yet, offer a combined popular list.
+        return collect($all)
+            ->flatMap(fn (array $models) => $models)
+            ->all();
     }
 
     public static function getRelations(): array

@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\CarSearchResource\Pages;
 
 use App\Filament\Resources\CarSearchResource;
-use App\Jobs\RunCarSearchJob;
 use App\Services\Images\CarImageSearchService;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +22,7 @@ class CreateCarSearch extends CreateRecord
             (int) $data['from_year'],
             (int) $data['to_year'],
             $data['color'] ?? null,
+            $data['transmission'] ?? null,
             (bool) ($data['transparent_background'] ?? false),
             (int) ($data['images_per_year'] ?? 10),
         );
@@ -38,11 +38,12 @@ class CreateCarSearch extends CreateRecord
             (int) $data['from_year'],
             (int) $data['to_year'],
             $data['color'] ?? null,
+            $data['transmission'] ?? null,
             (bool) ($data['transparent_background'] ?? false),
             (int) ($data['images_per_year'] ?? 10),
         );
 
-        RunCarSearchJob::dispatch($search);
+        $service->runSearch($search);
 
         return $search;
     }

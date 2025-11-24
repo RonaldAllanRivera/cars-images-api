@@ -23,15 +23,21 @@ class CarImageSearchService
         int $fromYear,
         int $toYear,
         ?string $color,
+        ?string $transmission,
         bool $transparent,
         int $imagesPerYear = 10
     ): CarSearch {
+        if ($fromYear > $toYear) {
+            [$fromYear, $toYear] = [$toYear, $fromYear];
+        }
+
         return CarSearch::create([
             'make' => $make,
             'model' => $model,
             'from_year' => $fromYear,
             'to_year' => $toYear,
             'color' => $color,
+            'transmission' => $transmission,
             'transparent_background' => $transparent,
             'images_per_year' => $imagesPerYear,
             'status' => 'pending',
@@ -45,6 +51,7 @@ class CarImageSearchService
         int $fromYear,
         int $toYear,
         ?string $color,
+        ?string $transmission,
         bool $transparent,
         int $imagesPerYear = 10
     ): ?CarSearch {
@@ -54,6 +61,7 @@ class CarImageSearchService
             ->where('from_year', $fromYear)
             ->where('to_year', $toYear)
             ->where('color', $color)
+            ->where('transmission', $transmission)
             ->where('transparent_background', $transparent)
             ->where('images_per_year', $imagesPerYear)
             ->where('status', 'completed')
@@ -89,6 +97,7 @@ class CarImageSearchService
             $search->model,
             $year,
             $search->color,
+            $search->transmission,
             $search->transparent_background,
             $limit
         );

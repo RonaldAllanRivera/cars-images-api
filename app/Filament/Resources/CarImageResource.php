@@ -46,7 +46,9 @@ class CarImageResource extends Resource
             ])
             ->filters([])
             ->actions([])
-            ->bulkActions([]);
+            ->bulkActions([])
+            ->paginated([10, 25, 50, 100])
+            ->defaultPaginationPageOption(100);
     }
 
     public static function getPages(): array

@@ -63,7 +63,7 @@ Create a dedicated service, e.g. `App\Services\Images\WikimediaClient`:
 
 - Config-driven base URL and timeouts (set in `config/services.php` or `config/images.php`).
 - Methods:
-  - `searchCars(string $make, ?string $model, int $year, ?string $color, bool $transparent, int $limit = 10): Collection`.
+  - `searchCars(string $make, ?string $model, int $year, ?string $color, ?string $transmission, bool $transparent, int $limit = 10): Collection`.
   - Internal helpers to:
     - Build search query string.
     - Map API response to a normalized DTO (title, URLs, size, license, attribution).
@@ -74,7 +74,7 @@ Create a dedicated service, e.g. `App\Services\Images\WikimediaClient`:
 
 ### 3.3 Caching
 
-- Cache results per **(make, model, year, color, transparent)** combination.
+- Cache results per **(make, model, year, color, transmission, transparent)** combination.
 - Store both in-memory cache (Redis) and DB-level records:
   - Reduces repeated calls when users search for the same data.
   - Facilitate reusing already-fetched images for other searches.
@@ -93,6 +93,7 @@ Design schema using migrations and Eloquent models. Tentative tables:
 - `from_year` (integer)
 - `to_year` (integer)
 - `color` (nullable string)
+- `transmission` (nullable string)
 - `transparent_background` (boolean)
 - `images_per_year` (integer, default 10)
 - `status` (enum or string: `pending`, `running`, `completed`, `failed`)
@@ -109,6 +110,7 @@ Purpose:
 - `car_search_id` (nullable FK) – the search that produced this image.
 - `make`, `model`, `year` – denormalized for quick filtering.
 - `color` (nullable)
+- `transmission` (nullable)
 - `transparent_background` (boolean)
 - `provider` (string, e.g. `wikimedia`)
 - `provider_image_id` / `page_id` (string/int)
@@ -146,6 +148,7 @@ This structure lets you:
    - FROM YEAR (required)
    - TO YEAR (required)
    - Color (optional)
+   - Transmission (optional)
    - Transparent background (boolean)
    - Images per year (default 10)
 3. On submit:
@@ -159,7 +162,7 @@ This structure lets you:
    - Option 1: Wait until all year-jobs complete using job chaining/batching and then mark `CarSearch` as `completed`.
    - Option 2: Mark `CarSearch` as `running` and let year-jobs individually update status when done; `completed` when all are done.
 5. `FetchWikimediaCarImagesForYearJob`:
-   - Check cache for `(make, model, year, color, transparent)`.
+   - Check cache for `(make, model, year, color, transmission, transparent)`.
    - If cached, hydrate `CarImage` records from cache.
    - Otherwise, call `WikimediaClient::searchCars(...)` with `limit = images_per_year`.
    - Normalize and upsert `CarImage` records.
@@ -188,7 +191,7 @@ This structure lets you:
 ### 7.1 Resources / Pages
 
 1. **CarSearchResource**
-   - Table columns: make, model, from_year, to_year, color, transparent, status, requested_by, created_at.
+   - Table columns: make, model, from_year, to_year, color, transmission, transparent, status, requested_by, created_at.
    - Actions:
      - View details: show parameters and related `CarImage` records.
      - Re-run search (dispatch `RunCarSearchJob` again).
@@ -197,12 +200,13 @@ This structure lets you:
    - Table columns:
      - Thumbnail (using Filament image column).
      - Make, model, year.
-     - Color, transparent flag.
+     - Color, transmission.
      - Provider, license.
      - Download status (badge), created_at.
    - Filters:
      - By make, model, year range.
      - By color.
+     - By transmission.
      - By download status.
    - Bulk actions:
      - Download selected.
@@ -301,18 +305,19 @@ This structure lets you:
   - Completed. Laravel 12 and Filament 4 are installed and configured. `car_searches` and `car_images` tables and models exist, and a `cars` filesystem disk is configured.
 
 - **Phase 2 – Wikimedia Client & Services**
-  - Completed. `WikimediaClient` calls the MediaWiki API, normalizes image data, and caches by query. `CarImageSearchService` coordinates multi-year searches and stores `CarImage` records.
+  - Completed. `WikimediaClient` calls the MediaWiki API, normalizes image data, and caches by query. Search queries now also include **transmission** when provided, and a lightweight content filter attempts to drop obvious non-car images (e.g. flowers / plants).
+  - `CarImageSearchService` coordinates multi-year searches and stores `CarImage` records.
   - Additional: `findExistingCompletedSearch()` provides DB-backed reuse of identical searches to avoid repeated Wikimedia calls.
 
 - **Phase 3 – Jobs & Queues**
-  - `RunCarSearchJob` implemented and used when creating new searches.
-  - Currently running synchronously via `QUEUE_CONNECTION=sync` for local development instead of a background worker.
-  - `FetchWikimediaCarImagesForYearJob` and `DownloadCarImagesJob` still to be implemented.
+  - `RunCarSearchJob`, `FetchWikimediaCarImagesForYearJob`, and `DownloadCarImagesJob` are implemented and ready for future background processing.
+  - In the current local setup, new searches are executed synchronously from the Filament Create page (no queue worker required), but the jobs can be wired up for async execution later.
 
 - **Phase 4 – Filament Admin UI**
   - `CarSearchResource` and `CarImageResource` created using Filament 4 APIs.
-  - Create page for `CarSearch` acts as the "Car Image Search" form, with reuse-or-create logic and status tracking.
+  - Create page for `CarSearch` acts as the "Car Image Search" form, with dynamic make/model selects, year range, color, transmission, transparent flag, and images-per-year fields, plus reuse-or-create logic and status tracking.
   - Relation manager shows images per search; a separate `Car Images` listing is available in the navigation.
+  - Both Car Searches and Car Images tables default to **100 rows per page** with adjustable pagination options.
 
 - **Phase 5 – Download & Export**
   - Not yet implemented. No download job or bulk actions for downloading/exporting images.

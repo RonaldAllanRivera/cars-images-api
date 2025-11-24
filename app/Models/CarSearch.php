@@ -17,6 +17,7 @@ class CarSearch extends Model
         'from_year',
         'to_year',
         'color',
+        'transmission',
         'transparent_background',
         'images_per_year',
         'status',

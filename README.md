@@ -11,9 +11,10 @@
 
 This project is an internal **Cars Images API** built on **Laravel 12** and **Filament 4**. It integrates with **Wikimedia Commons** to search and cache high-resolution car images based on:
 
-- **Make** and optional **model**
+- **Make** and optional **model** (dynamic dropdowns)
 - **FROM YEAR / TO YEAR** range (multiple years)
 - Optional **color**
+- Optional **transmission** (Automatic / Manual / CVT)
 - Optional **transparent background** preference
 
 For each year in the selected range, the system queries Wikimedia (up to a configurable number of images per year), stores normalized metadata in the database, and exposes the results through a Filament admin panel.
@@ -21,9 +22,11 @@ For each year in the selected range, the system queries Wikimedia (up to a confi
 ### Key features
 
 - Filament 4 admin panel at `/admin`
+- **Car Image Search** form with dynamic make/model selects, year range, color, transmission, transparent flag, and images-per-year
 - Car image searches stored in `car_searches` with status tracking (`pending`, `running`, `completed`, `failed`)
 - Image metadata stored in `car_images` (provider IDs, URLs, size, license, attribution, etc.)
 - **DB-backed reuse** of identical searches to avoid hitting Wikimedia more than necessary
+- Simple content filter that tries to drop obvious non-car images (e.g. flowers / plants)
 - Configurable Wikimedia integration via `config/images.php` and `.env`
 - Dedicated `cars` storage disk for future downloaded image files
 
@@ -81,6 +84,32 @@ For each year in the selected range, the system queries Wikimedia (up to a confi
 
    - Filament admin: `http://cars-images-api.test/admin`
    - Car Image Searches: `http://cars-images-api.test/admin/car-searches`
+
+### Usage
+
+#### Running a car image search
+
+1. Sign in to Filament at `/admin`.
+2. Navigate to **Cars → Car Image Searches** and click **Create**.
+3. Use the form:
+   - Choose a **Make** – the **Model** dropdown will automatically update to show popular models for that make.
+   - Set **From year / To year** (the service normalizes the range if they are reversed).
+   - Optionally pick a **Color** and **Transmission**.
+   - Toggle **Transparent background** and adjust **Images per year**.
+4. Submit the form.
+   - The app calls the Wikimedia API for each year, filters results to likely car images, stores them in `car_images`, and redirects to the search **View** page.
+5. On the **View** page, scroll to the **Images** section to see thumbnails and metadata.
+
+#### Browsing cached images
+
+- Go to **Cars → Car Images** to browse all stored images.
+- Both Car Searches and Car Images lists default to **100 rows per page**; use the pagination selector to change the page size.
+
+#### Search behaviour and caching
+
+- The **first** time you run a make/model/year/color/transmission combination, the app calls Wikimedia and caches the results in the database.
+- Subsequent searches with the **same parameters** reuse the existing completed `CarSearch` and its `CarImage` records instead of calling Wikimedia again.
+- The Wikimedia client applies a simple filter to drop obvious non-car images (e.g. flowers / plants) using title, description, and category metadata.
 
 ### Current limitations / next steps
 
