@@ -81,6 +81,7 @@ class CarImagesRelationManager extends RelationManager
             ])
             ->bulkActions([
                 Actions\DeleteBulkAction::make(),
-            ]);
+            ])
+            ->poll('1s');
     }
 }

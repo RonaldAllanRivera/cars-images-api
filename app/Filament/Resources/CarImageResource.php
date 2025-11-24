@@ -97,7 +97,8 @@ class CarImageResource extends Resource
                 Actions\DeleteBulkAction::make(),
             ])
             ->paginated([10, 25, 50, 100])
-            ->defaultPaginationPageOption(100);
+            ->defaultPaginationPageOption(100)
+            ->poll('1s');
     }
 
     public static function getPages(): array

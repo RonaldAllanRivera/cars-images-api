@@ -325,7 +325,7 @@ This structure lets you:
   - Both Car Searches and Car Images tables default to **100 rows per page** with adjustable pagination options.
 
 - **Phase 5 – Download & Export**
-  - Not yet implemented. No download job or bulk actions for downloading/exporting images.
+  - Partially implemented. Single-image downloads are available from the preview modal via an internal download endpoint that streams the provider image and marks `download_status` as `downloaded`, but bulk download/export actions wired through `DownloadCarImagesJob` from Filament are still pending.
 
 - **Phase 6 – Hardening**
   - Partially planned but not implemented. Retries, basic validation, and caching exist, but rate limiting, logging/metrics, and automated tests are still to be added.
