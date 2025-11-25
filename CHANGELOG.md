@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 
 - Bulk ZIP download filenames now include the image ID so multiple images with the same make/model/year do not overwrite each other inside the archive.
 - Car Searches and Car Images UIs now treat missing model/color/transmission filters as **All** – tables render `All` instead of blank for `null` values, and the Car Search form hydrates **All ...** options when editing or viewing existing searches so dropdowns are never empty.
+- Editing an existing Car Search from Filament now clears its previous images and re-runs the Wikimedia search with the updated filters, providing a convenient "search again with new filters" workflow when results are wrong.
 
 ## [0.3.0] - 2025-11-24
 

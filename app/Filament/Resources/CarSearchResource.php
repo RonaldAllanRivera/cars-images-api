@@ -295,6 +295,7 @@ class CarSearchResource extends Resource
             'index' => Pages\ListCarSearches::route('/'),
             'create' => Pages\CreateCarSearch::route('/create'),
             'view' => Pages\ViewCarSearch::route('/{record}'),
+            'edit' => Pages\EditCarSearch::route('/{record}/edit'),
         ];
     }
 }

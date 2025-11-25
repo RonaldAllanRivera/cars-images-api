@@ -217,12 +217,13 @@ After this, you can continue development on the new PC and push/pull as normal.
    - The app calls the Wikimedia API for each year, filters results to likely car images, stores them in `car_images`, and redirects to the search **View** page.
 5. On the **View** page, scroll to the **Images** relation to see thumbnails and metadata.
 
-### Refreshing a search from Wikimedia
+### Refreshing or re-running a search
 
 - From a search view page (**Cars → Car Image Searches → View**), use **Refresh from Wikimedia** in the header actions to:
   - Delete existing images for that search.
   - Clear cached Wikimedia responses for its years.
-  - Re-run the search synchronously using the current filters.
+  - Re-run the search synchronously using the **current** filters (useful when filters are correct but you want a fresh set of results).
+- To **search again with different filters**, click **Edit** on the search, adjust fields such as Make/Model, year range, Color, or Transmission, and click **Save**. After saving, the app deletes the old images for that search, re-runs the Wikimedia calls with the **updated** filters, and repopulates the Images relation with the new results.
 
 ### Cleaning up incorrect images
 
