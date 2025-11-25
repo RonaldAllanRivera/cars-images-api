@@ -240,7 +240,11 @@ This structure lets you:
    - Uses a simple form with a make name and a repeater field to add multiple models under that make.
    - Once populated, this becomes the primary source for make/model suggestions in the Car Image Search form.
 
-4. **Custom Filament Page: "Car Image Search"**
+4. **UserResource**
+   - Admin resource for managing Filament users (admin accounts).
+   - Simple form with name, unique email, and password. Password is required on create and optional on edit; when changed, it is hashed automatically via the model cast.
+
+5. **Custom Filament Page: "Car Image Search"**
    - A form-driven page (outside the standard resource CRUD) optimised for triggering new searches.
    - Fields mirror the search parameters.
    - On submit, create `CarSearch` and dispatch `RunCarSearchJob`.

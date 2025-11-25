@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 - Ability to "search again" by editing an existing Car Search in Filament; after saving updated filters, previous images are cleared and the Wikimedia search is re-run with the new parameters.
  - `CarMakeResource` admin pages for managing car makes and their models in one place, backed by new `car_makes` and `car_models` tables.
  - `CarMakeSeeder` to pre-populate the catalog with common makes and models used by the Car Image Search dropdowns.
+ - `UserResource` admin pages for listing, creating, and editing Filament users (admin accounts) with name, unique email, and password.
 
 ### Changed
 

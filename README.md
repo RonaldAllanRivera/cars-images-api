@@ -65,6 +65,7 @@ It is designed as an internal tool and portfolio project to demonstrate:
   - `CarSearchResource` – search form, search history, status, and related images.
   - `CarImageResource` – global view of all cached images.
   - `CarMakeResource` – catalog of car makes and their models, used to drive make/model dropdowns on the search form.
+  - `UserResource` – simple admin user management (name, unique email, password) so you can add additional Filament admins from the UI.
 
 For more detail, see `PLAN.md` and `CHAT.md` in the project root.
 
@@ -226,6 +227,12 @@ After this, you can continue development on the new PC and push/pull as normal.
 - Navigate to **Cars → Car Makes** to manage the catalog of makes and models.
 - When you create or edit a car make, you can add multiple models via the **Models** repeater field.
 - The Car Image Search form will use these values as its make/model options (falling back to built-in defaults if the tables are empty).
+
+### Managing admin users
+
+- Navigate to **System → Admin Users** to manage Filament admin accounts.
+- Use **Create** to add a new admin with name, email, and password. The password is stored securely using Laravel's hashed cast.
+- When editing a user, leave the password blank to keep it unchanged, or enter a new password to update it.
 
 ### Refreshing or re-running a search
 
