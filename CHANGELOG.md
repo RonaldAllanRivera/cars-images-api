@@ -9,6 +9,16 @@ All notable changes to this project will be documented in this file.
 - Implement image download job wiring and bulk download/export actions in Filament.
 - Add rate limiting, detailed logging/metrics, and automated tests.
 
+## [0.4.1] - 2025-11-25
+
+### Added
+
+- Ability to "search again" by editing an existing Car Search in Filament; after saving updated filters, previous images are cleared and the Wikimedia search is re-run with the new parameters.
+
+### Changed
+
+- Car Searches and Car Images UIs now treat missing model/color/transmission filters as **All** – tables render `All` instead of blank for `null` values, and the Car Search form hydrates **All ...** options when editing or viewing existing searches so dropdowns are never empty.
+
 ## [0.4.0] - 2025-11-24
 
 ### Added
@@ -18,8 +28,6 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Bulk ZIP download filenames now include the image ID so multiple images with the same make/model/year do not overwrite each other inside the archive.
-- Car Searches and Car Images UIs now treat missing model/color/transmission filters as **All** – tables render `All` instead of blank for `null` values, and the Car Search form hydrates **All ...** options when editing or viewing existing searches so dropdowns are never empty.
-- Editing an existing Car Search from Filament now clears its previous images and re-runs the Wikimedia search with the updated filters, providing a convenient "search again with new filters" workflow when results are wrong.
 
 ## [0.3.0] - 2025-11-24
 
