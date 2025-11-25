@@ -41,6 +41,9 @@ class CarImagesRelationManager extends RelationManager
                 Tables\Columns\TextColumn::make('year')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('color')
+                    ->getStateUsing(function (CarImage $record): string {
+                        return $record->color ?? 'All';
+                    })
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('license')
                     ->limit(20)

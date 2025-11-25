@@ -51,11 +51,17 @@ class CarImageResource extends Resource
                     ->sortable()
                     ->searchable(),
                 Tables\Columns\TextColumn::make('model')
+                    ->getStateUsing(function (CarImage $record): string {
+                        return $record->model ?? 'All';
+                    })
                     ->sortable()
                     ->searchable(),
                 Tables\Columns\TextColumn::make('year')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('color')
+                    ->getStateUsing(function (CarImage $record): string {
+                        return $record->color ?? 'All';
+                    })
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('license')
                     ->limit(20)
@@ -107,8 +113,7 @@ class CarImageResource extends Resource
                 Actions\DeleteBulkAction::make(),
             ])
             ->paginated([10, 25, 50, 100])
-            ->defaultPaginationPageOption(100)
-            ->poll('1s');
+            ->defaultPaginationPageOption(100);
     }
 
     public static function getPages(): array

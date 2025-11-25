@@ -47,7 +47,19 @@ class CarSearchResource extends Resource
                 })
                 ->default('__all__')
                 ->searchable()
-                ->nullable(),
+                ->nullable()
+                ->afterStateHydrated(function ($component, $state): void {
+                    if ($state === null || $state === '') {
+                        $component->state('__all__');
+                    }
+                })
+                ->dehydrateStateUsing(function ($state) {
+                    if ($state === '' || $state === '__all__') {
+                        return null;
+                    }
+
+                    return $state;
+                }),
             Forms\Components\TextInput::make('from_year')
                 ->numeric()
                 ->required()
@@ -74,7 +86,19 @@ class CarSearchResource extends Resource
                 ])
                 ->default('__all__')
                 ->searchable()
-                ->nullable(),
+                ->nullable()
+                ->afterStateHydrated(function ($component, $state): void {
+                    if ($state === null || $state === '') {
+                        $component->state('__all__');
+                    }
+                })
+                ->dehydrateStateUsing(function ($state) {
+                    if ($state === '' || $state === '__all__') {
+                        return null;
+                    }
+
+                    return $state;
+                }),
             Forms\Components\Select::make('transmission')
                 ->options([
                     '__all__' => 'All transmissions',
@@ -84,7 +108,19 @@ class CarSearchResource extends Resource
                 ])
                 ->default('__all__')
                 ->searchable()
-                ->nullable(),
+                ->nullable()
+                ->afterStateHydrated(function ($component, $state): void {
+                    if ($state === null || $state === '') {
+                        $component->state('__all__');
+                    }
+                })
+                ->dehydrateStateUsing(function ($state) {
+                    if ($state === '' || $state === '__all__') {
+                        return null;
+                    }
+
+                    return $state;
+                }),
             Forms\Components\Toggle::make('transparent_background')
                 ->label('Transparent background')
                 ->default(false),
@@ -104,8 +140,24 @@ class CarSearchResource extends Resource
                     ->sortable()
                     ->searchable(),
                 Tables\Columns\TextColumn::make('model')
+                    ->label('Model')
+                    ->getStateUsing(function (CarSearch $record): string {
+                        return $record->model ?? 'All';
+                    })
                     ->sortable()
                     ->searchable(),
+                Tables\Columns\TextColumn::make('color')
+                    ->label('Color')
+                    ->getStateUsing(function (CarSearch $record): string {
+                        return $record->color ?? 'All';
+                    })
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('transmission')
+                    ->label('Transmission')
+                    ->getStateUsing(function (CarSearch $record): string {
+                        return $record->transmission ?? 'All';
+                    })
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('from_year')
                     ->label('From')
                     ->sortable(),

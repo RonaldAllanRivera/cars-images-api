@@ -245,6 +245,7 @@ After this, you can continue development on the new PC and push/pull as normal.
 
 - The **first** time you run a make/model/year/color/transmission combination, the app calls Wikimedia and caches the results in the database.
 - Subsequent searches with the **same parameters** reuse the existing completed `CarSearch` and its `CarImage` records instead of calling Wikimedia again.
+- When you leave **Model**, **Color**, or **Transmission** on their **All ...** options, those fields are stored as `null` in the database, but Filament forms and tables always render them as `All` (for example, `All models`, `All colors`, `All transmissions`) so it is obvious that no filter was applied.
 - The Wikimedia client applies a lightweight filter to drop obvious non-car images (e.g. flowers / plants, or clearly non-car academic/journal pages) using title, description, categories, and other metadata.
 - Using **Refresh from Wikimedia** invalidates both the cached images and the underlying Wikimedia cache for that search's years, so new results are fetched with the current filters.
 

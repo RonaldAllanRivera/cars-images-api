@@ -193,7 +193,7 @@ This structure lets you:
 ### 7.1 Resources / Pages
 
 1. **CarSearchResource**
-   - Table columns: make, model, from_year, to_year, color, transmission, transparent, status, requested_by, created_at.
+   - Table columns: make, model, color, transmission, from_year, to_year, status, created_at. When model, color, or transmission are `null` (no filter), the UI displays them as `All` so it is obvious that the search is not restricted on that field.
    - Actions:
      - View details: show parameters and related `CarImage` records.
      - Refresh from Wikimedia: delete existing images for the search, clear cached Wikimedia responses for its years, and re-run the search with the latest filters.
@@ -322,6 +322,7 @@ This structure lets you:
 - **Phase 4 – Filament Admin UI**
   - `CarSearchResource` and `CarImageResource` created using Filament 4 APIs.
   - Create page for `CarSearch` acts as the "Car Image Search" form, with dynamic make/model selects, year range, and optional color/transmission filters (via "All ..." options), a transparent flag, and images-per-year fields, plus reuse-or-create logic and status tracking.
+  - Existing `CarSearch` records that have `null` model, color, or transmission values hydrate the form with the corresponding **All ...** options, and both Car Searches and Car Images tables render those `null` values as `All` for consistent UX.
   - Relation manager shows images per search; a separate `Car Images` listing is available in the navigation. Both views provide per-row and bulk **Delete** actions so admins can clean up incorrect images.
   - `ViewCarSearch` exposes a **Refresh from Wikimedia** header action that removes existing images for the search, clears cached Wikimedia responses for its years, and re-runs the search synchronously with the latest filters.
   - Both Car Searches and Car Images tables default to **100 rows per page** with adjustable pagination options.
