@@ -18,11 +18,12 @@ return new class extends Migration
 
     /**
      * Reverse the migrations.
+     *
+     * We intentionally keep these columns as TEXT when rolling back to avoid
+     * truncation errors if existing data exceeds 255 characters.
      */
     public function down(): void
     {
-        DB::statement('ALTER TABLE car_images MODIFY `title` VARCHAR(255) NOT NULL');
-        DB::statement('ALTER TABLE car_images MODIFY `source_url` VARCHAR(255) NOT NULL');
-        DB::statement('ALTER TABLE car_images MODIFY `thumbnail_url` VARCHAR(255) NULL');
+        // no-op: do not shrink long URL/title columns back to VARCHAR(255)
     }
 };

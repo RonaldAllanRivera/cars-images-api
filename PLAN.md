@@ -131,11 +131,27 @@ Purpose:
 - `CarSearch` hasMany `CarImage`.
 - `CarImage` belongsTo `CarSearch`.
 - `User` hasMany `CarSearch`.
+ - `CarMake` hasMany `CarModel`.
+ - `CarModel` belongsTo `CarMake`.
 
 This structure lets you:
 - Track who ran which search.
 - See images across searches.
 - Reuse or re-download specific images.
+
+### 4.4 `car_makes` table
+
+- `id`
+- `name` (unique string) – canonical name of the make (e.g. `Toyota`, `Ford`).
+- Timestamps.
+
+### 4.5 `car_models` table
+
+- `id`
+- `car_make_id` (FK to `car_makes`).
+- `name` (string) – model name (e.g. `Corolla`, `Explorer`).
+- Unique constraint on (`car_make_id`, `name`).
+- Timestamps.
 
 ---
 
@@ -219,7 +235,12 @@ This structure lets you:
      - Preview image in a modal (larger thumbnail with metadata and source link).
      - Download single image immediately via an internal download endpoint that streams the provider image to the browser.
 
-3. **Custom Filament Page: "Car Image Search"**
+3. **CarMakeResource**
+   - Admin resource for managing car makes and their models.
+   - Uses a simple form with a make name and a repeater field to add multiple models under that make.
+   - Once populated, this becomes the primary source for make/model suggestions in the Car Image Search form.
+
+4. **Custom Filament Page: "Car Image Search"**
    - A form-driven page (outside the standard resource CRUD) optimised for triggering new searches.
    - Fields mirror the search parameters.
    - On submit, create `CarSearch` and dispatch `RunCarSearchJob`.
@@ -321,9 +342,10 @@ This structure lets you:
   - In the current local setup, new searches are executed synchronously from the Filament Create page (no queue worker required), but the jobs can be wired up for async execution later.
 
 - **Phase 4 – Filament Admin UI**
-  - `CarSearchResource` and `CarImageResource` created using Filament 4 APIs.
+  - `CarSearchResource`, `CarImageResource`, and `CarMakeResource` created using Filament 4 APIs.
   - Create page for `CarSearch` acts as the "Car Image Search" form, with dynamic make/model selects, year range, and optional color/transmission filters (via "All ..." options), a transparent flag, and images-per-year fields, plus reuse-or-create logic and status tracking.
   - Existing `CarSearch` records that have `null` model, color, or transmission values hydrate the form with the corresponding **All ...** options, and both Car Searches and Car Images tables render those `null` values as `All` for consistent UX.
+  - `CarMakeResource` provides a dedicated page under the Cars navigation group where admins can add a car make and maintain a list of models for that make via a repeater, which feeds into the Car Image Search make/model dropdowns.
   - Editing a `CarSearch` from Filament now triggers a re-run of the search after save, clearing previous images and repopulating them using the updated filters so admins can quickly "search again" when results are wrong.
   - Relation manager shows images per search; a separate `Car Images` listing is available in the navigation. Both views provide per-row and bulk **Delete** actions so admins can clean up incorrect images.
   - `ViewCarSearch` exposes a **Refresh from Wikimedia** header action that removes existing images for the search, clears cached Wikimedia responses for its years, and re-runs the search synchronously with the latest filters.

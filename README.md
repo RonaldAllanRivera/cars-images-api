@@ -29,6 +29,9 @@ It is designed as an internal tool and portfolio project to demonstrate:
   - Car Searches and Car Images tables with sortable, searchable columns and default **100 rows per page** for efficient review.
   - Per-row and bulk **Delete** actions for images, a **Refresh from Wikimedia** action on each search to clear images + cache and re-run with the latest filters, and a fast image **Preview** modal with a direct **Download** button that streams the image via an internal endpoint and updates the `download_status` badge in real time.
   - Bulk **Download selected** action on image tables that streams all selected images as a single ZIP archive with unique filenames to your local machine.
+ - **Car make & model catalog**
+   - Dedicated **Car Makes** admin page where you can define a make once and attach multiple models using a repeater.
+   - These makes and models populate the options for the Car Image Search form, with sensible defaults seeded for common brands.
 
 ---
 
@@ -61,6 +64,7 @@ It is designed as an internal tool and portfolio project to demonstrate:
 - **Filament resources**
   - `CarSearchResource` – search form, search history, status, and related images.
   - `CarImageResource` – global view of all cached images.
+  - `CarMakeResource` – catalog of car makes and their models, used to drive make/model dropdowns on the search form.
 
 For more detail, see `PLAN.md` and `CHAT.md` in the project root.
 
@@ -133,7 +137,7 @@ php artisan key:generate
 php artisan migrate --seed
 ```
 
-> The seeder should create a Filament admin user you can log in with.
+> The seeder creates a Filament admin user you can log in with, and also seeds a default list of **car makes and models** used by the Car Image Search form.
 
 ### 5. Create storage symlink
 
@@ -216,6 +220,12 @@ After this, you can continue development on the new PC and push/pull as normal.
 4. Submit the form.
    - The app calls the Wikimedia API for each year, filters results to likely car images, stores them in `car_images`, and redirects to the search **View** page.
 5. On the **View** page, scroll to the **Images** relation to see thumbnails and metadata.
+
+### Managing car makes and models
+
+- Navigate to **Cars → Car Makes** to manage the catalog of makes and models.
+- When you create or edit a car make, you can add multiple models via the **Models** repeater field.
+- The Car Image Search form will use these values as its make/model options (falling back to built-in defaults if the tables are empty).
 
 ### Refreshing or re-running a search
 

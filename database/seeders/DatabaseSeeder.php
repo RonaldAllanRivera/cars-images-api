@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
 
         $this->call([
             FilamentAdminUserSeeder::class,
+            CarMakeSeeder::class,
         ]);
     }
 }

@@ -14,10 +14,14 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Ability to "search again" by editing an existing Car Search in Filament; after saving updated filters, previous images are cleared and the Wikimedia search is re-run with the new parameters.
+ - `CarMakeResource` admin pages for managing car makes and their models in one place, backed by new `car_makes` and `car_models` tables.
+ - `CarMakeSeeder` to pre-populate the catalog with common makes and models used by the Car Image Search dropdowns.
 
 ### Changed
 
 - Car Searches and Car Images UIs now treat missing model/color/transmission filters as **All** – tables render `All` instead of blank for `null` values, and the Car Search form hydrates **All ...** options when editing or viewing existing searches so dropdowns are never empty.
+ - `CarSearchResource` now prefers make/model options from the `car_makes` / `car_models` tables (falling back to static arrays when empty) so the search form uses the curated catalog.
+ - The `0001_01_01_000005_alter_car_images_url_columns` migration `down()` method is now a no-op, avoiding data truncation errors when rolling back or refreshing migrations with long Wikimedia URLs stored in `title`, `source_url`, or `thumbnail_url`.
 
 ## [0.4.0] - 2025-11-24
 

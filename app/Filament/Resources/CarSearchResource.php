@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\CarSearchResource\Pages;
 use App\Filament\Resources\CarSearchResource\RelationManagers\CarImagesRelationManager;
 use App\Models\CarSearch;
+use App\Models\CarMake;
 use BackedEnum;
 use UnitEnum;
 use Filament\Actions;
@@ -197,6 +198,15 @@ class CarSearchResource extends Resource
 
     protected static function getMakeOptions(): array
     {
+        $dbMakes = CarMake::query()
+            ->orderBy('name')
+            ->pluck('name', 'name')
+            ->all();
+
+        if (! empty($dbMakes)) {
+            return $dbMakes;
+        }
+
         return [
             'Toyota' => 'Toyota',
             'Honda' => 'Honda',
@@ -213,6 +223,20 @@ class CarSearchResource extends Resource
 
     protected static function getModelOptionsForMake(?string $make): array
     {
+        if ($make) {
+            $makeRecord = CarMake::query()
+                ->where('name', $make)
+                ->with('models')
+                ->first();
+
+            if ($makeRecord) {
+                return $makeRecord->models
+                    ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+                    ->pluck('name', 'name')
+                    ->all();
+            }
+        }
+
         $all = [
             'Toyota' => [
                 'Corolla' => 'Corolla',
