@@ -9,6 +9,17 @@ All notable changes to this project will be documented in this file.
 - Implement image download job wiring and bulk download/export actions in Filament.
 - Add rate limiting, detailed logging/metrics, and automated tests.
 
+## [0.4.2] - 2025-11-27
+
+### Added
+
+- `DEPLOYMENT.md` with a detailed SiteGround deployment guide for the `cars-search.artworkwebsite.com` subdomain, including recommended directory layout, cloning from GitHub, environment configuration, and troubleshooting.
+
+### Changed
+
+- Documented SiteGround-specific `.htaccess` options for serving Laravel from `public/`, including an explicit rewrite rule for `/livewire/livewire.js` to avoid 404/403 errors that break the Filament login on shared hosting.
+- Updated the `User` model to implement `FilamentUser` and define `canAccessPanel()`, ensuring authenticated users can access the Filament admin panel in production instead of seeing `403 | FORBIDDEN` after login.
+
 ## [0.4.1] - 2025-11-25
 
 ### Added

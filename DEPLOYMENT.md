@@ -125,7 +125,30 @@ RewriteCond %{REQUEST_URI} !^/cars-images-api/public/
 RewriteRule ^(.*)$ /cars-images-api/public/$1 [L]
 ```
 
-With this configuration, the URL in the browser stays as `https://cars-search.artworkwebsite.com/...`, but Apache serves files from `cars-images-api/public`.
+Alternatively, if you cloned the repository **directly into `public_html`** (so the Laravel project root is `~/www/cars-search.artworkwebsite.com/public_html` and the front controller is `public_html/public/index.php`), use this `.htaccess` in `public_html`:
+
+```apache
+# ~/www/cars-search.artworkwebsite.com/public_html/.htaccess
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Let Laravel handle Livewire's JS endpoint explicitly
+    RewriteCond %{REQUEST_URI} ^/livewire/livewire\.js$ [NC]
+    RewriteRule ^ public/index.php [L]
+
+    # Don't rewrite if already under /public
+    RewriteCond %{REQUEST_URI} !^/public/
+
+    # Send everything else into the Laravel public/ folder
+    RewriteRule ^(.*)$ /public/$1 [L,QSA]
+</IfModule>
+```
+
+This makes:
+
+- `https://cars-search.artworkwebsite.com/` serve `public/index.php` without exposing `/public` in the URL.
+- `/livewire/livewire.js` and other Livewire endpoints go through Laravel instead of being treated as missing static files, avoiding 404/403 errors that break the Filament login.
 
 > **Laravel `public/.htaccess`** – The Laravel project already includes an `.htaccess` file inside the `public/` directory with the standard rewrite rules that send all non-existing files/directories to `index.php`. On SiteGround you normally **leave this file as-is** – just make sure it exists after deployment.
 
@@ -250,6 +273,30 @@ php artisan view:cache
 ```
 
 At this point, visiting `https://cars-search.artworkwebsite.com` should load the application and the Filament admin panel at `/admin`.
+
+### 2.10. Ensure Filament admin access (User model)
+
+Filament requires your authenticated user model to explicitly allow access to the admin panel. In this project, the `User` model implements `FilamentUser` and defines `canAccessPanel()`.
+
+In `app/Models/User.php`:
+
+```php
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+
+class User extends Authenticatable implements FilamentUser
+{
+    // ...
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return true; // allow all users, or add your own logic here
+    }
+}
+```
+
+If this method is missing or returns `false`, logging in at `/admin/login` will authenticate the user but redirect to a **`403 | FORBIDDEN`** page instead of the dashboard.
 
 ---
 
