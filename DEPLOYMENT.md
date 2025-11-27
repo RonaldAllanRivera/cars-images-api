@@ -62,6 +62,20 @@ git checkout main
 cd ..
 ```
 
+> **Alternative (directly into `public_html`):** If you deliberately want the repository files to live **inside** `public_html` instead of using the recommended layout above, you can run `git clone` with `.` (dot) as the target directory. This is less ideal for security, but works on shared hosting.
+
+From inside `public_html`:
+
+```bash
+cd ~/www/cars-search.artworkwebsite.com/public_html
+
+# Make sure public_html is empty or only has the default placeholder
+rm Default.html  # or mv Default.html ../Default.html.bak
+
+# Clone the repo directly into the current folder
+git clone https://github.com/RonaldAllanRivera/cars-images-api.git .
+```
+
 ### 2.3. Configure the document root
 
 #### Option A – Change docroot in SiteGround UI (preferred)
@@ -92,6 +106,28 @@ ln -s cars-images-api/public public_html
 ```
 
 After this, requests to `cars-search.artworkwebsite.com` will be served from `cars-images-api/public`.
+
+#### .htaccess notes for SiteGround / Apache
+
+In the recommended setups above (changing the document root to `cars-images-api/public` **or** using a symlink), you usually **don’t need a custom `.htaccess` in `public_html`**. Apache will serve the `public/` directory directly, and Laravel’s own `public/.htaccess` will handle all routing.
+
+If you prefer to keep the subdomain document root as `public_html` and your Laravel app in a subfolder (for example `public_html/cars-images-api/public`), you can instead use a `.htaccess` file in `public_html` (based on SiteGround’s KB) to internally rewrite all requests into that subfolder:
+
+```apache
+# ~/www/cars-search.artworkwebsite.com/public_html/.htaccess
+
+RewriteEngine On
+
+# Prevent rewrite loops when already inside the Laravel public/ folder
+RewriteCond %{REQUEST_URI} !^/cars-images-api/public/
+
+# Send everything to the Laravel public/ directory
+RewriteRule ^(.*)$ /cars-images-api/public/$1 [L]
+```
+
+With this configuration, the URL in the browser stays as `https://cars-search.artworkwebsite.com/...`, but Apache serves files from `cars-images-api/public`.
+
+> **Laravel `public/.htaccess`** – The Laravel project already includes an `.htaccess` file inside the `public/` directory with the standard rewrite rules that send all non-existing files/directories to `index.php`. On SiteGround you normally **leave this file as-is** – just make sure it exists after deployment.
 
 ### 2.4. Install PHP dependencies (Composer)
 
