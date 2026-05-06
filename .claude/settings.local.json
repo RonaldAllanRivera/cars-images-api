@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /home/allan/code/laravel/cars-images-api log --format=%B -1 2c9999b)",
+      "Bash(git -C /home/allan/code/laravel/cars-images-api show f3973a3 -- Dockerfile)",
+      "Bash(docker compose *)"
+    ]
+  }
+}

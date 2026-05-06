@@ -1,0 +1,15 @@
+vendor
+node_modules
+npm-debug.log
+yarn-error.log
+Dockerfile
+docker-compose.yml
+.git
+.gitignore
+.idea
+.vscode
+.env
+storage/logs
+storage/framework/cache
+storage/framework/sessions
+storage/framework/views
