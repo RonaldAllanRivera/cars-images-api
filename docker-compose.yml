@@ -1,0 +1,49 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        WWWUSER: '${WWWUSER:-1000}'
+        WWWGROUP: '${WWWGROUP:-1000}'
+    image: cars-images-api/app
+    ports:
+      - '${APP_PORT:-8080}:80'
+    environment:
+      APP_ENV: '${APP_ENV:-local}'
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+      - /var/www/html/node_modules
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [cars-net]
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    ports:
+      - '${FORWARD_DB_PORT:-3307}:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+      MYSQL_DATABASE: '${DB_DATABASE}'
+      MYSQL_USER: '${DB_USERNAME}'
+      MYSQL_PASSWORD: '${DB_PASSWORD}'
+    volumes:
+      - cars-mysql-data:/var/lib/mysql
+    networks: [cars-net]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}"]
+      retries: 5
+      timeout: 5s
+      interval: 10s
+    restart: unless-stopped
+
+networks:
+  cars-net:
+    driver: bridge
+
+volumes:
+  cars-mysql-data:
+    driver: local
