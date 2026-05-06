@@ -71,6 +71,36 @@ For more detail, see `PLAN.md` and `CHAT.md` in the project root.
 
 ---
 
+## Getting started with Docker (recommended for SiteGround parity)
+
+This stack mirrors SiteGround shared hosting — Apache + mod_php + MySQL, with `file` cache/session and `sync` queue. Use it locally so routing and `.htaccess` bugs surface here, not after upload.
+
+### Prerequisites
+
+- Docker Engine 24+ and Docker Compose v2.
+
+### Bring it up
+
+```bash
+cp .env.example .env
+docker compose build
+docker compose up -d
+docker compose exec app composer install
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan migrate --seed
+```
+
+Then open `http://localhost:8080` and the Filament admin at `http://localhost:8080/admin`.
+
+### Notes
+
+- Override the host port via `APP_PORT` in `.env` (e.g. `APP_PORT=80`).
+- The `app` container runs as your host user (UID/GID 1000 by default — override with `WWWUSER` / `WWWGROUP` build args if your host user differs).
+- MySQL data persists in the named volume `cars-mysql-data`; `docker compose down` keeps it, `docker compose down -v` wipes it.
+- Re-run `docker compose exec app composer install` after pulling changes that touch `composer.json` / `composer.lock`.
+
+---
+
 ## Getting started (local development with Laragon)
 
 ### Prerequisites
