@@ -29,7 +29,7 @@ Two services only:
 
 ### `app`
 
-- **Base image:** `php:8.2-apache`.
+- **Base image:** `php:8.3-apache`.
 - **PHP extensions:** `pdo_mysql`, `mbstring`, `exif`, `pcntl`, `bcmath`, `gd` (configured with freetype + jpeg), `intl`, `zip`.
 - **Composer:** copied from the official `composer:2` image into `/usr/bin/composer`.
 - **Apache modules:** `mod_rewrite` enabled.
@@ -50,7 +50,7 @@ No nginx. No Redis. No queue worker. No scheduler. No Node container.
 
 | File | Action | Purpose |
 |---|---|---|
-| `Dockerfile` | **Rewrite** | Base `php:8.2-apache`; install extensions; enable mod_rewrite; set DocumentRoot via vhost; copy in `docker/apache/000-default.conf`; accept `WWWUSER`/`WWWGROUP` build args; remove phpredis (no Redis on SiteGround) |
+| `Dockerfile` | **Rewrite** | Base `php:8.3-apache`; install extensions; enable mod_rewrite; set DocumentRoot via vhost; copy in `docker/apache/000-default.conf`; accept `WWWUSER`/`WWWGROUP` build args; remove phpredis (no Redis on SiteGround) |
 | `docker/apache/000-default.conf` | **New** | Apache vhost on :80 with `DocumentRoot /var/www/html/public` and `AllowOverride All` so `public/.htaccess` is honored |
 | `docker/nginx/default.conf` | **Delete** | Replaced by Apache vhost |
 | `docker/nginx/` | **Delete** | Empty after the file removal |

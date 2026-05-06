@@ -83,6 +83,7 @@ This stack mirrors SiteGround shared hosting — Apache + mod_php + MySQL, with 
 
 ```bash
 cp .env.example .env
+# Edit .env — set APP_NAME, DB_DATABASE, DB_USERNAME, DB_PASSWORD before continuing
 docker compose build
 docker compose up -d
 docker compose exec app composer install
