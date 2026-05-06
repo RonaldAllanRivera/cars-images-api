@@ -207,7 +207,7 @@ DB_PASSWORD=YOUR_DB_PASSWORD
 
 # Caching / queueing (simple defaults)
 QUEUE_CONNECTION=sync
-CACHE_DRIVER=file
+CACHE_STORE=file
 SESSION_DRIVER=file
 ```
 
