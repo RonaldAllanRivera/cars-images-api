@@ -54,6 +54,7 @@ RUN composer install \
         --prefer-dist \
         --no-interaction \
         --optimize-autoloader \
+        --no-scripts \
     && chown -R www-data:www-data storage bootstrap/cache
 
 EXPOSE 80
