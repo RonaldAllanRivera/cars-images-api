@@ -29,6 +29,8 @@ class CarImageBulkDownloadController extends Controller
         $tmpPath = tempnam(sys_get_temp_dir(), 'cars-batch-');
         $builder->buildToFile($images, $tmpPath);
 
+        CarImage::whereIn('id', $images->pluck('id'))->update(['download_status' => 'downloaded']);
+
         $filename = 'cars-batch-' . now()->format('Ymd-His') . '.zip';
 
         return response()->download($tmpPath, $filename, [
