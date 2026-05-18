@@ -22,6 +22,7 @@ class CarSearch extends Model
         'images_per_year',
         'status',
         'requested_by',
+        'csv_import_id',
     ];
 
     protected function casts(): array
@@ -42,5 +43,15 @@ class CarSearch extends Model
     public function requester(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    public function csvImport(): BelongsTo
+    {
+        return $this->belongsTo(CsvImport::class);
+    }
+
+    public function blockEvents(): HasMany
+    {
+        return $this->hasMany(WikimediaBlockEvent::class);
     }
 }
