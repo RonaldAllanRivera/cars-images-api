@@ -8,5 +8,6 @@ return [
         'retry_sleep_ms' => env('WIKIMEDIA_RETRY_SLEEP_MS', 200),
         'user_agent' => env('WIKIMEDIA_USER_AGENT', 'CarsImagesApi/1.0 (Laravel)'),
         'cache_ttl' => env('WIKIMEDIA_CACHE_TTL', 3600),
+        'maxlag' => env('WIKIMEDIA_MAXLAG', 5),
     ],
 ];
