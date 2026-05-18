@@ -1,0 +1,83 @@
+<?php
+
+namespace Tests\Feature\Services\Downloads;
+
+use App\Models\CarImage;
+use App\Models\CarSearch;
+use App\Models\CsvImport;
+use App\Models\User;
+use App\Services\Downloads\BatchZipBuilder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
+use ZipArchive;
+
+class BatchZipBuilderTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_writes_zip_with_renamed_entries_and_duplicate_suffix(): void
+    {
+        Http::fake([
+            'https://example.com/a.jpg' => Http::response('AAAA', 200),
+            'https://example.com/b.png' => Http::response('BBBB', 200),
+        ]);
+
+        $user = User::factory()->create();
+        $csvImport = CsvImport::create([
+            'original_filename' => 'test.csv',
+            'total_rows' => 1,
+            'unique_combos' => 1,
+            'duplicates_skipped' => 0,
+            'imported_by' => $user->id,
+        ]);
+
+        $search = CarSearch::create([
+            'make' => 'Toyota', 'model' => 'RAV4',
+            'from_year' => 1997, 'to_year' => 1997,
+            'color' => null, 'transmission' => null,
+            'transparent_background' => false, 'images_per_year' => 5,
+            'status' => 'completed', 'requested_by' => $user->id,
+            'csv_import_id' => $csvImport->id,
+        ]);
+
+        $img1 = CarImage::create([
+            'car_search_id' => $search->id, 'provider' => 'wikimedia',
+            'provider_image_id' => 'A', 'make' => 'Toyota', 'model' => 'RAV4',
+            'year' => 1997, 'title' => 'A', 'source_url' => 'https://example.com/a.jpg',
+            'thumbnail_url' => 'https://example.com/a.jpg',
+            'width' => 800, 'height' => 600, 'download_status' => 'not_downloaded',
+        ]);
+
+        $img2 = CarImage::create([
+            'car_search_id' => $search->id, 'provider' => 'wikimedia',
+            'provider_image_id' => 'B', 'make' => 'Toyota', 'model' => 'RAV4',
+            'year' => 1997, 'title' => 'B', 'source_url' => 'https://example.com/b.png',
+            'thumbnail_url' => 'https://example.com/b.png',
+            'width' => 800, 'height' => 600, 'download_status' => 'not_downloaded',
+        ]);
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'zip');
+
+        $builder = app(BatchZipBuilder::class);
+        $builder->buildToFile(collect([$img1, $img2]), $tmpFile);
+
+        $zip = new ZipArchive();
+        $opened = $zip->open($tmpFile);
+        $this->assertTrue($opened === true, 'ZIP should open successfully');
+
+        $names = [];
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $names[] = $zip->getNameIndex($i);
+        }
+        sort($names);
+
+        $this->assertSame(['1997 Toyota RAV4 2.png', '1997 Toyota RAV4.jpg'], $names);
+
+        $this->assertSame('AAAA', $zip->getFromName('1997 Toyota RAV4.jpg'));
+        $this->assertSame('BBBB', $zip->getFromName('1997 Toyota RAV4 2.png'));
+
+        $zip->close();
+        unlink($tmpFile);
+    }
+}
