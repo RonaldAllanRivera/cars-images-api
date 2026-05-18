@@ -1,7 +1,8 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -11,9 +12,11 @@ return new class extends Migration
     public function up(): void
     {
         // Widen external string fields to handle long Wikimedia URLs and titles
-        DB::statement('ALTER TABLE car_images MODIFY `title` TEXT NOT NULL');
-        DB::statement('ALTER TABLE car_images MODIFY `source_url` TEXT NOT NULL');
-        DB::statement('ALTER TABLE car_images MODIFY `thumbnail_url` TEXT NULL');
+        Schema::table('car_images', function (Blueprint $table) {
+            $table->text('title')->nullable(false)->change();
+            $table->text('source_url')->nullable(false)->change();
+            $table->text('thumbnail_url')->nullable()->change();
+        });
     }
 
     /**
