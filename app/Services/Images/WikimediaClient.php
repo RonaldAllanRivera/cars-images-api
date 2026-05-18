@@ -2,6 +2,7 @@
 
 namespace App\Services\Images;
 
+use App\Exceptions\WikimediaBlockedException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -68,10 +69,18 @@ class WikimediaClient
         $retrySleep = (int) config('images.wikimedia.retry_sleep_ms', 200);
         $userAgent = (string) config('images.wikimedia.user_agent', 'CarsImagesApi/1.0 (Laravel)');
 
+        $blockStatuses = [429, 403, 503];
+
         $response = Http::withHeaders([
             'User-Agent' => $userAgent,
         ])->timeout($timeout)
-            ->retry($retryTimes, $retrySleep)
+            ->retry($retryTimes, $retrySleep, function ($exception, $request) use ($blockStatuses) {
+                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+                    return ! in_array($exception->response->status(), $blockStatuses, true);
+                }
+
+                return true;
+            }, false)
             ->get($baseUrl, [
                 'action' => 'query',
                 'format' => 'json',
@@ -84,8 +93,20 @@ class WikimediaClient
                 'gsrlimit' => $limit,
                 'iiprop' => 'url|size|mime|extmetadata',
                 'iiurlwidth' => 1200,
-            ])
-            ->throw();
+                'maxlag' => config('images.wikimedia.maxlag', 5),
+            ]);
+
+        if (in_array($response->status(), [429, 403, 503], true)) {
+            throw new WikimediaBlockedException(
+                statusCode: $response->status(),
+                retryAfterSeconds: $response->header('Retry-After') !== ''
+                    ? (int) $response->header('Retry-After')
+                    : null,
+                responseExcerpt: mb_substr($response->body(), 0, 1024),
+            );
+        }
+
+        $response->throw();
 
         $data = $response->json();
         $pages = Arr::get($data, 'query.pages', []);
