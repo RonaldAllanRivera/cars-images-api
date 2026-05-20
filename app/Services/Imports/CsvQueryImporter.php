@@ -37,6 +37,7 @@ class CsvQueryImporter
             $makeIdx = $columnIndex['Make'];
             $modelIdx = $columnIndex['Model'];
             $yearIdx = $columnIndex['Year'];
+            $transmissionIdx = $columnIndex['Transmission'] ?? null;
 
             $maxYear = (int) date('Y') + 1;
             $minYear = 1900;
@@ -67,6 +68,7 @@ class CsvQueryImporter
                         'year' => $yearInt,
                         'make' => $make,
                         'model' => $model,
+                        'transmission' => $transmissionIdx !== null ? (trim($row[$transmissionIdx] ?? '') ?: null) : null,
                     ];
                 }
             }
@@ -99,7 +101,7 @@ class CsvQueryImporter
                         'from_year' => $combo['year'],
                         'to_year' => $combo['year'],
                         'color' => null,
-                        'transmission' => null,
+                        'transmission' => $combo['transmission'],
                         'transparent_background' => false,
                         'images_per_year' => $imagesPerYear,
                         'status' => 'pending',

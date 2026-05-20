@@ -16,7 +16,7 @@ class CarImageBulkDownloadController extends Controller
         BatchZipBuilder $builder,
     ): BinaryFileResponse {
         $data = $request->validate([
-            'image_ids' => ['required', 'array', 'min:1'],
+            'image_ids' => ['required', 'array', 'min:1', 'max:500'],
             'image_ids.*' => ['integer'],
         ]);
 
@@ -43,7 +43,7 @@ class CarImageBulkDownloadController extends Controller
         BatchCsvExporter $exporter,
     ): StreamedResponse {
         $data = $request->validate([
-            'image_ids' => ['required', 'array', 'min:1'],
+            'image_ids' => ['required', 'array', 'min:1', 'max:500'],
             'image_ids.*' => ['integer'],
         ]);
 

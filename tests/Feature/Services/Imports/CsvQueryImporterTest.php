@@ -127,4 +127,19 @@ class CsvQueryImporterTest extends TestCase
 
         app(CsvQueryImporter::class)->import($csv, $user);
     }
+
+    public function test_captures_transmission_from_first_occurrence(): void
+    {
+        $user = User::factory()->create();
+        $csv = $this->makeCsv(<<<CSV
+        Make,Model,Year,Transmission
+        Toyota,RAV4,1997,Automatic 4-spd
+        Toyota,RAV4,1997,Manual 5-spd
+        CSV);
+
+        app(CsvQueryImporter::class)->import($csv, $user);
+
+        $search = CarSearch::first();
+        $this->assertSame('Automatic 4-spd', $search->transmission);
+    }
 }
