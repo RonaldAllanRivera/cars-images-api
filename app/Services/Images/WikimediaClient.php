@@ -24,20 +24,40 @@ class WikimediaClient
         bool $transparent,
         int $limit = 10
     ): Collection {
-        $query = $this->buildQuery($make, $model, $year, $color, $transmission, $transparent);
+        $results = $this->cachedSearch(
+            $this->buildQuery($make, $model, $year, $color, $transmission, $transparent),
+            $limit,
+        );
 
-        $cacheKey = $this->cacheKey($query, $limit);
+        if ($results->isNotEmpty()) {
+            return $results;
+        }
+
+        // Recall fallback: a hard year term over-constrains Wikimedia full-text
+        // search for models with sparse coverage ("Acura CL 1998 car" returns
+        // nothing, "Acura CL car" returns 10). When the year-specific search is
+        // empty, retry once with the year dropped.
+        return $this->cachedSearch(
+            $this->buildQuery($make, $model, null, $color, $transmission, $transparent),
+            $limit,
+        );
+    }
+
+    protected function cachedSearch(string $query, int $limit): Collection
+    {
         $ttl = (int) config('images.wikimedia.cache_ttl', 3600);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($query, $limit) {
-            return $this->searchImages($query, $limit);
-        });
+        return Cache::remember(
+            $this->cacheKey($query, $limit),
+            $ttl,
+            fn () => $this->searchImages($query, $limit),
+        );
     }
 
     protected function buildQuery(
         string $make,
         ?string $model,
-        int $year,
+        ?int $year,
         ?string $color,
         ?string $transmission,
         bool $transparent
@@ -49,7 +69,10 @@ class WikimediaClient
             $terms[] = $normalizedModel !== '' ? $normalizedModel : $model;
         }
 
-        $terms[] = (string) $year;
+        if ($year !== null) {
+            $terms[] = (string) $year;
+        }
+
         $terms[] = 'car';
 
         if ($color !== null && $color !== '') {
@@ -215,10 +238,12 @@ class WikimediaClient
         bool $transparent,
         int $limit = 10
     ): void {
-        $query = $this->buildQuery($make, $model, $year, $color, $transmission, $transparent);
-        $cacheKey = $this->cacheKey($query, $limit);
-
-        Cache::forget($cacheKey);
+        // searchCars() may have cached either the year-specific query or the
+        // year-relaxed fallback query — forget both.
+        foreach ([$year, null] as $queryYear) {
+            $query = $this->buildQuery($make, $model, $queryYear, $color, $transmission, $transparent);
+            Cache::forget($this->cacheKey($query, $limit));
+        }
     }
 
     protected function isCarImage(array $image): bool
