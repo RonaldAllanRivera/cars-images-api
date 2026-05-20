@@ -10,6 +10,11 @@ use Illuminate\Support\Facades\Http;
 
 class WikimediaClient
 {
+    public function __construct(
+        protected ModelSearchTermNormalizer $modelNormalizer,
+    ) {
+    }
+
     public function searchCars(
         string $make,
         ?string $model,
@@ -40,7 +45,8 @@ class WikimediaClient
         $terms = [$make];
 
         if ($model !== null && $model !== '') {
-            $terms[] = $model;
+            $normalizedModel = $this->modelNormalizer->normalize($model);
+            $terms[] = $normalizedModel !== '' ? $normalizedModel : $model;
         }
 
         $terms[] = (string) $year;

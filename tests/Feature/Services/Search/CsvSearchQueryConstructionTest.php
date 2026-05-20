@@ -52,6 +52,36 @@ class CsvSearchQueryConstructionTest extends TestCase
         });
     }
 
+    public function test_messy_model_string_is_normalized_in_query(): void
+    {
+        $this->fakeEmptyWikimedia();
+
+        $user = User::factory()->create();
+        $csvImport = CsvImport::create([
+            'original_filename' => 'test.csv',
+            'total_rows' => 1, 'unique_combos' => 1, 'duplicates_skipped' => 0,
+            'imported_by' => $user->id,
+        ]);
+
+        $search = CarSearch::create([
+            'make' => 'Acura', 'model' => '2.2CL/3.0CL',
+            'from_year' => 1997, 'to_year' => 1997,
+            'color' => null, 'transmission' => null,
+            'transparent_background' => false, 'images_per_year' => 5,
+            'status' => 'pending', 'requested_by' => $user->id,
+            'csv_import_id' => $csvImport->id,
+        ]);
+
+        app(CarImageSearchService::class)->runSearch($search);
+
+        Http::assertSent(function ($request) {
+            $query = $request->data()['gsrsearch'] ?? '';
+
+            return str_contains($query, 'Acura CL 1997')
+                && ! str_contains($query, '2.2CL');
+        });
+    }
+
     public function test_ad_hoc_search_still_includes_transmission_in_query(): void
     {
         $this->fakeEmptyWikimedia();
