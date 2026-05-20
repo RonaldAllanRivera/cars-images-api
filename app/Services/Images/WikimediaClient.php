@@ -129,6 +129,12 @@ class WikimediaClient
                     return false;
                 }
 
+                // Namespace 6 (File:) includes PDFs, DjVu and other documents.
+                // Keep only actual raster/vector images.
+                if (! str_starts_with((string) ($image['mime'] ?? ''), 'image/')) {
+                    return false;
+                }
+
                 return $this->isCarImage($image);
             })
             ->values();
@@ -148,6 +154,7 @@ class WikimediaClient
                 'thumbnail_url' => null,
                 'width' => null,
                 'height' => null,
+                'mime' => null,
                 'license' => null,
                 'attribution' => null,
                 'metadata' => $page,
@@ -176,6 +183,7 @@ class WikimediaClient
             'thumbnail_url' => $imageInfo['thumburl'] ?? ($imageInfo['url'] ?? null),
             'width' => $imageInfo['width'] ?? null,
             'height' => $imageInfo['height'] ?? null,
+            'mime' => $imageInfo['mime'] ?? null,
             'license' => $license,
             'attribution' => $attributionParts ? implode(' | ', $attributionParts) : null,
             'metadata' => $page,
