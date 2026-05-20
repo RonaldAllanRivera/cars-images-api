@@ -240,6 +240,18 @@ After this, you can continue development on the new PC and push/pull as normal.
 
 ## Usage
 
+### CSV Bulk Search and Download
+
+For bulk harvesting, use the three-page CSV workflow under the **Cars** navigation group:
+
+1. **Upload CSV** (`/admin/csv-imports/create`) — drop in a CSV with columns `Make, Model, Year, Transmission`. Rows are deduplicated by `(Year, Make, Model)`. Uploads with more than `CSV_IMPORT_MAX_COMBOS` unique combos (default 1,000) are rejected; split the CSV externally first.
+2. **Search Queries** (`/admin/search-queries`) — review the imported queries. Click `[Run]` per-row, or select multiple and click `[Run Selected]`. The bulk run caps at 50 queries or 50 seconds per click — click again to continue.
+3. **Results** (`/admin/results`) — browse images from completed queries. Select images and use `[Download Selected as ZIP]` (renamed files inside) or `[Export Selected as CSV]` (manifest).
+
+**Filename format:** `"YEAR MAKE MODEL.ext"` — e.g. `1997 Toyota RAV4.jpg`. Duplicates within an export get a numeric suffix: `1997 Toyota RAV4.jpg`, `1997 Toyota RAV4 2.jpg`.
+
+**Wikimedia etiquette is on by default:** honest User-Agent with contact info, `maxlag=5`, 24h cache, 1-second throttle between bulk queries, exponential backoff on transient errors. Any 429/403/503 response auto-pauses the bulk loop and writes a `wikimedia_block_events` row.
+
 ### Running a car image search
 
 1. Sign in to Filament at `/admin`.
