@@ -74,7 +74,10 @@ class WikimediaClient
         $response = Http::withHeaders([
             'User-Agent' => $userAgent,
         ])->timeout($timeout)
-            ->retry($retryTimes, $retrySleep, function ($exception, $request) use ($blockStatuses) {
+            ->retry($retryTimes, function (int $attempt) use ($retrySleep) {
+                // Exponential backoff: base * 2^(attempt-1)
+                return $retrySleep * (2 ** ($attempt - 1));
+            }, function ($exception, $request) use ($blockStatuses) {
                 if ($exception instanceof \Illuminate\Http\Client\RequestException) {
                     return ! in_array($exception->response->status(), $blockStatuses, true);
                 }

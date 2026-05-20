@@ -8,10 +8,10 @@ Route::get('/', function () {
     return redirect('/admin');
 });
 
-Route::get('/car-images/{carImage}/download', CarImageDownloadController::class)
-    ->name('car-images.download');
-
 Route::middleware(['auth'])->group(function () {
+    Route::get('/car-images/{carImage}/download', CarImageDownloadController::class)
+        ->name('car-images.download');
+
     Route::post('/batch-downloads/zip', [CarImageBulkDownloadController::class, 'zip'])
         ->name('batch-downloads.zip');
 

@@ -22,7 +22,7 @@ class CreateCsvImport extends CreateRecord
         return $schema->components([
             FileUpload::make('csv_file')
                 ->label('CSV file (Make,Model,Year,Transmission)')
-                ->acceptedFileTypes(['text/csv', 'application/csv', 'application/vnd.ms-excel'])
+                ->acceptedFileTypes(['text/csv', 'text/plain', 'application/csv', 'application/vnd.ms-excel'])
                 ->maxSize(5 * 1024) // 5 MB
                 ->storeFiles(false)
                 ->required(),
