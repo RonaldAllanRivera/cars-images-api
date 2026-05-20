@@ -15,6 +15,7 @@ services:
       - .:/var/www/html
       - /var/www/html/vendor
       - /var/www/html/node_modules
+      - ./docker/php/opcache.ini:/usr/local/etc/php/conf.d/zz-dev-opcache.ini
     depends_on:
       mysql:
         condition: service_healthy
