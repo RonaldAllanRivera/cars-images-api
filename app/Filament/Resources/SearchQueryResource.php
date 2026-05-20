@@ -111,13 +111,7 @@ class SearchQueryResource extends Resource
                     ->icon('heroicon-o-photo')
                     ->color('success')
                     ->visible(fn (CarSearch $record) => $record->status === 'completed')
-                    ->url(function (CarSearch $record): ?string {
-                        try {
-                            return route('filament.admin.pages.results', ['searchId' => $record->id]);
-                        } catch (\Throwable) {
-                            return null;
-                        }
-                    }),
+                    ->url(fn (CarSearch $record) => route('filament.admin.pages.results', ['searchId' => $record->id])),
             ])
             ->toolbarActions([
                 Actions\BulkAction::make('runSelected')
