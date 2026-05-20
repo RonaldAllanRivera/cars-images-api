@@ -27,6 +27,11 @@ class CarSearchResource extends Resource
 
     protected static ?string $navigationLabel = 'Car Image Searches';
 
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getEloquentQuery()->whereNull('csv_import_id');
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([

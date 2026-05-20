@@ -33,11 +33,18 @@ class Results extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query(
-                CarImage::query()
+            ->query(function () {
+                $query = CarImage::query()
                     ->whereHas('search', fn (Builder $q) => $q->whereNotNull('csv_import_id'))
-                    ->with('search.csvImport')
-            )
+                    ->with('search.csvImport');
+
+                $searchId = request()->query('searchId');
+                if ($searchId !== null && $searchId !== '') {
+                    $query->where('car_search_id', (int) $searchId);
+                }
+
+                return $query;
+            })
             ->columns([
                 Tables\Columns\ImageColumn::make('thumbnail_url')
                     ->label('Thumbnail')
