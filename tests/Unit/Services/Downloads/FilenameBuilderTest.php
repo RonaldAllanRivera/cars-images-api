@@ -102,4 +102,15 @@ class FilenameBuilderTest extends TestCase
 
         $this->assertSame('2020 Toyota RAV4.jpg', $name);
     }
+
+    public function test_build_ranked_returns_base_for_rank_one(): void
+    {
+        $this->assertSame('1997 Toyota RAV4.jpg', $this->builder->buildRanked(1997, 'Toyota', 'RAV4', 'jpg', 1));
+    }
+
+    public function test_build_ranked_appends_suffix_for_higher_ranks(): void
+    {
+        $this->assertSame('1997 Toyota RAV4 2.jpg', $this->builder->buildRanked(1997, 'Toyota', 'RAV4', 'jpg', 2));
+        $this->assertSame('1997 Toyota RAV4 5.jpg', $this->builder->buildRanked(1997, 'Toyota', 'RAV4', 'jpg', 5));
+    }
 }

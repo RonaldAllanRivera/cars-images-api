@@ -31,6 +31,27 @@ class FilenameBuilder
     }
 
     /**
+     * Generate a filename with a rank-based duplicate suffix.
+     * Rank 1 → "BASE.ext"; rank 2 → "BASE 2.ext"; rank N → "BASE N.ext".
+     * Used for single-image downloads where the rank is the image's
+     * deterministic position within its parent search.
+     */
+    public function buildRanked(int $year, string $make, string $model, string $extension, int $rank): string
+    {
+        $candidate = $this->build($year, $make, $model, $extension);
+
+        if ($rank <= 1) {
+            return $candidate;
+        }
+
+        $extPos = strrpos($candidate, '.');
+        $base = substr($candidate, 0, $extPos);
+        $ext = substr($candidate, $extPos);
+
+        return "{$base} {$rank}{$ext}";
+    }
+
+    /**
      * Generate a filename guaranteed unique within $usedNames.
      * Mutates $usedNames to track issued names.
      *

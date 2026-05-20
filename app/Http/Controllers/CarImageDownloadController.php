@@ -3,13 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\CarImage;
+use App\Services\Downloads\FilenameBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class CarImageDownloadController
 {
+    public function __construct(
+        private FilenameBuilder $filenames,
+    ) {}
+
     public function __invoke(Request $request, CarImage $carImage)
     {
         $sourceUrl = $carImage->source_url;
@@ -59,19 +63,27 @@ class CarImageDownloadController
             $ext = match ($contentType) {
                 'image/png' => 'png',
                 'image/gif' => 'gif',
+                'image/webp' => 'webp',
                 default => 'jpg',
             };
         }
 
-        $parts = array_filter([
-            $image->make,
-            $image->model,
-            $image->year,
-        ]);
+        // Rank = this image's 1-based position within its parent search,
+        // so repeated single downloads of the same (year,make,model) get
+        // distinct, deterministic filenames.
+        $rank = 1;
+        if ($image->search) {
+            $ids = $image->search->images()->orderBy('id')->pluck('id');
+            $position = $ids->search($image->id);
+            $rank = $position === false ? 1 : $position + 1;
+        }
 
-        $base = $parts ? implode('-', $parts) : 'car-image';
-        $base = Str::slug($base) ?: 'car-image';
-
-        return $base.'.'.$ext;
+        return $this->filenames->buildRanked(
+            (int) $image->year,
+            (string) $image->make,
+            (string) $image->model,
+            $ext,
+            $rank,
+        );
     }
 }
