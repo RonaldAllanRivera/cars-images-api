@@ -102,7 +102,7 @@ class CarImageSearchService
                 $search->model,
                 $year,
                 $search->color,
-                $search->transmission,
+                $this->transmissionForQuery($search),
                 $search->transparent_background,
                 $search->images_per_year,
             );
@@ -118,7 +118,7 @@ class CarImageSearchService
             $search->model,
             $year,
             $search->color,
-            $search->transmission,
+            $this->transmissionForQuery($search),
             $search->transparent_background,
             $limit
         );
@@ -150,5 +150,18 @@ class CarImageSearchService
                 ]
             );
         });
+    }
+
+    /**
+     * Transmission value to feed into the Wikimedia query.
+     *
+     * CSV-imported searches keep `transmission` only as informational
+     * metadata for the manifest export — including it in the image query
+     * over-constrains it and returns zero results (image pages never
+     * mention "Automatic 4-spd"). Ad-hoc searches keep their behaviour.
+     */
+    private function transmissionForQuery(CarSearch $search): ?string
+    {
+        return $search->csv_import_id !== null ? null : $search->transmission;
     }
 }
