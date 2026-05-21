@@ -4,16 +4,108 @@ This document describes how to deploy the `cars-images-api` Laravel app to **Sit
 
 - **Domain:** `cars-search.artworkwebsite.com`
 - **SiteGround path:** `www/cars-search.artworkwebsite.com/public_html`
+- **GitHub repo:** `https://github.com/RonaldAllanRivera/cars-images-api.git`
 
-You will deploy directly from the GitHub repo:
+**Deployment model:** the code lives on GitHub. You `git clone` it onto SiteGround over SSH, then `git pull` for every later update. There is no SiteGround Git integration or CI/CD — every deploy is a manual SSH session.
 
-- `https://github.com/RonaldAllanRivera/cars-images-api.git`
-
-You already know how to connect via SSH, so the steps below assume you are logged into your SiteGround account over SSH.
+This guide is written for an **Ubuntu** workstation. SiteGround's own SSH tutorial covers PuTTY on Windows; Section 2 below is the Ubuntu (OpenSSH) equivalent.
 
 ---
 
-## 1. Recommended directory layout
+## 1. Before you start
+
+### 1.1. Push your code to GitHub
+
+SiteGround pulls the app **from GitHub**, so GitHub must hold the code you want to deploy. From your Ubuntu machine, in the project directory:
+
+```bash
+git status            # confirm the branch and that nothing important is uncommitted
+git push origin main
+```
+
+If `git push` asks for a username/password or fails with `could not read Username`, your machine has no GitHub credentials yet. Pick one:
+
+- **Personal Access Token (HTTPS):** create a token at GitHub → Settings → Developer settings → Personal access tokens, then use it as the password when `git push` prompts. Install `git-credential-libsecret` (or run `git config --global credential.helper store`) so you are not asked every time.
+- **SSH (recommended if you also use the key below):** add an SSH public key to GitHub → Settings → SSH and GPG keys, then switch the remote:
+  ```bash
+  git remote set-url origin git@github.com:RonaldAllanRivera/cars-images-api.git
+  git push origin main
+  ```
+
+Do not continue until `git push` succeeds and the GitHub repo shows your latest commit.
+
+### 1.2. Make sure SiteGround runs PHP 8.3 or newer
+
+This app **requires PHP 8.3+** (`composer.lock` pins packages that do not run on 8.2). If SiteGround serves an older version, `composer install` will fail.
+
+In **Site Tools → Devs → PHP Manager**, set the PHP version for `cars-search.artworkwebsite.com` to **8.3 (or newer)**. If the site uses "Managed PHP", switch to "Manually" and choose 8.3+.
+
+### 1.3. Collect what you will need
+
+Have these ready before connecting:
+
+- **SiteGround SSH details** — hostname, username, and port (SiteGround uses port **18765**). Found in **Site Tools → Devs → SSH Keys Manager**.
+- **A production MySQL database** — create one in **Site Tools → Site → MySQL** and note the database name, username, password, and host.
+
+---
+
+## 2. Connecting to SiteGround via SSH (from Ubuntu)
+
+SiteGround's PuTTY tutorial is Windows-only. On Ubuntu you use the built-in OpenSSH client — no PuTTY, no PuTTYgen, no key conversion.
+
+### 2.1. Create an SSH key in SiteGround
+
+1. Open **Site Tools → Devs → SSH Keys Manager**.
+2. Click **Create** / **Generate**, give the key a name (e.g. `ubuntu-cars`), optionally set a passphrase, and create it.
+3. **Download the private key** to your Ubuntu machine. Save it as `~/.ssh/siteground`.
+4. On the same page, note the **Hostname**, **Username**, and **Port** (`18765`) shown for SSH access.
+
+> Prefer to keep the private key on your machine only? Instead generate the key locally with
+> `ssh-keygen -t ed25519 -f ~/.ssh/siteground -C "ubuntu-cars"`, then **Import** the contents of
+> `~/.ssh/siteground.pub` into the SSH Keys Manager. Either approach works.
+
+### 2.2. Install the private key on Ubuntu
+
+OpenSSH refuses private keys with loose permissions, so lock the file down:
+
+```bash
+mkdir -p ~/.ssh
+mv ~/Downloads/siteground ~/.ssh/siteground   # adjust to wherever you saved it
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/siteground
+```
+
+### 2.3. Connect
+
+```bash
+ssh -i ~/.ssh/siteground -p 18765 YOUR_SG_USERNAME@YOUR_SG_HOSTNAME
+```
+
+Replace `YOUR_SG_USERNAME` and `YOUR_SG_HOSTNAME` with the values from Step 2.1. Accept the host fingerprint the first time. If you set a passphrase, enter it when prompted.
+
+### 2.4. Optional: add an SSH alias
+
+So you can just type `ssh siteground`, add this to `~/.ssh/config` on Ubuntu:
+
+```text
+Host siteground
+    HostName YOUR_SG_HOSTNAME
+    User YOUR_SG_USERNAME
+    Port 18765
+    IdentityFile ~/.ssh/siteground
+```
+
+Then connect with:
+
+```bash
+ssh siteground
+```
+
+All commands in the rest of this guide are run **on SiteGround**, inside that SSH session.
+
+---
+
+## 3. Recommended directory layout
 
 **Goal:** Keep the Laravel application *outside* the public web root, and expose **only** the `public/` directory.
 
@@ -36,17 +128,17 @@ The commands below are written assuming this recommended layout.
 
 ---
 
-## 2. One-time initial deployment
+## 4. One-time initial deployment
 
-All commands below are run after connecting to SiteGround over SSH.
+All commands below are run **on SiteGround**, in the SSH session opened in Section 2.
 
-### 2.1. Go to the subdomain base directory
+### 4.1. Go to the subdomain base directory
 
 ```bash
 cd ~/www/cars-search.artworkwebsite.com
 ```
 
-### 2.2. Clone the GitHub repository
+### 4.2. Clone the GitHub repository
 
 Clone the app into a folder called `cars-images-api`:
 
@@ -62,6 +154,8 @@ git checkout main
 cd ..
 ```
 
+> **Private repository?** If the GitHub repo is private, an unauthenticated `git clone` over HTTPS will fail. Either make the repo public, or create a read-only **deploy key** (a separate SSH key added to the repo on GitHub) and clone with the `git@github.com:...` URL.
+
 > **Alternative (directly into `public_html`):** If you deliberately want the repository files to live **inside** `public_html` instead of using the recommended layout above, you can run `git clone` with `.` (dot) as the target directory. This is less ideal for security, but works on shared hosting.
 
 From inside `public_html`:
@@ -76,7 +170,7 @@ rm Default.html  # or mv Default.html ../Default.html.bak
 git clone https://github.com/RonaldAllanRivera/cars-images-api.git .
 ```
 
-### 2.3. Configure the document root
+### 4.3. Configure the document root
 
 #### Option A – Change docroot in SiteGround UI (preferred)
 
@@ -152,7 +246,17 @@ This makes:
 
 > **Laravel `public/.htaccess`** – The Laravel project already includes an `.htaccess` file inside the `public/` directory with the standard rewrite rules that send all non-existing files/directories to `index.php`. On SiteGround you normally **leave this file as-is** – just make sure it exists after deployment.
 
-### 2.4. Install PHP dependencies (Composer)
+### 4.4. Verify the PHP version, then install Composer dependencies
+
+First confirm the SSH session is using PHP 8.3+ (see Section 1.2):
+
+```bash
+php -v
+```
+
+If it reports 8.2 or lower, fix the PHP version in **Site Tools → Devs → PHP Manager** before continuing — `composer install` will otherwise fail.
+
+Then install dependencies:
 
 ```bash
 cd ~/www/cars-search.artworkwebsite.com/cars-images-api
@@ -168,7 +272,7 @@ php -d memory_limit=-1 ~/bin/composer.phar install --no-dev --optimize-autoloade
 
 Adjust the command based on how Composer is installed on your SiteGround account.
 
-### 2.5. Create and configure the `.env` file
+### 4.5. Create and configure the `.env` file
 
 Copy the example configuration:
 
@@ -205,15 +309,17 @@ DB_DATABASE=YOUR_DB_NAME
 DB_USERNAME=YOUR_DB_USER
 DB_PASSWORD=YOUR_DB_PASSWORD
 
-# Caching / queueing (simple defaults)
+# Caching / queueing (simple defaults — no queue worker or Redis needed)
 QUEUE_CONNECTION=sync
 CACHE_STORE=file
 SESSION_DRIVER=file
 ```
 
+`.env.example` already ships sensible defaults for the Wikimedia and CSV-import settings. One worth checking: `WIKIMEDIA_USER_AGENT` should identify the site with a real contact (a URL and/or email) — Wikimedia asks bulk readers to be contactable.
+
 Save and close the file when done.
 
-### 2.6. Set correct file permissions
+### 4.6. Set correct file permissions
 
 Laravel needs write permissions on `storage` and `bootstrap/cache`.
 
@@ -234,7 +340,7 @@ find bootstrap/cache -type d -exec chmod 775 {} \;
 find bootstrap/cache -type f -exec chmod 664 {} \;
 ```
 
-### 2.7. Create the storage symlink
+### 4.7. Create the storage symlink
 
 Ensure public access to files stored under `storage/app/public`:
 
@@ -244,7 +350,7 @@ cd ~/www/cars-search.artworkwebsite.com/cars-images-api
 php artisan storage:link
 ```
 
-### 2.8. Run database migrations and seeders
+### 4.8. Run database migrations and seeders
 
 Run migrations in production mode and seed the database (including car makes/models and admin user seeder that are registered in `DatabaseSeeder`):
 
@@ -262,7 +368,7 @@ php artisan db:seed --class=CarMakeSeeder --force
 php artisan db:seed --class=FilamentAdminUserSeeder --force
 ```
 
-### 2.9. Optimize the application for production
+### 4.9. Optimize the application for production
 
 ```bash
 cd ~/www/cars-search.artworkwebsite.com/cars-images-api
@@ -274,7 +380,7 @@ php artisan view:cache
 
 At this point, visiting `https://cars-search.artworkwebsite.com` should load the application and the Filament admin panel at `/admin`.
 
-### 2.10. Ensure Filament admin access (User model)
+### 4.10. Ensure Filament admin access (User model)
 
 Filament requires your authenticated user model to explicitly allow access to the admin panel. In this project, the `User` model implements `FilamentUser` and defines `canAccessPanel()`.
 
@@ -300,11 +406,11 @@ If this method is missing or returns `false`, logging in at `/admin/login` will 
 
 ---
 
-## 3. Setting up Laravel scheduler (optional but recommended)
+## 5. Setting up Laravel scheduler (optional)
 
-If you start using scheduled tasks or queued jobs in the future, configure a cron job in SiteGround.
+This app does **not** require a queue worker or cron to run — searches execute synchronously and the CSV bulk feature is paced manually from the admin UI (`QUEUE_CONNECTION=sync`).
 
-In **Site Tools → Devs → Cron Jobs**, add a cron job that runs every minute:
+If you later add scheduled tasks or queued jobs, configure a cron job in **Site Tools → Devs → Cron Jobs** that runs every minute:
 
 ```bash
 * * * * * php /home/YOUR_SG_USERNAME/www/cars-search.artworkwebsite.com/cars-images-api/artisan schedule:run >> /home/YOUR_SG_USERNAME/laravel-schedule.log 2>&1
@@ -312,39 +418,46 @@ In **Site Tools → Devs → Cron Jobs**, add a cron job that runs every minute:
 
 Replace `YOUR_SG_USERNAME` with your actual SiteGround username.
 
-If you later change `QUEUE_CONNECTION` from `sync` to something like `database`, ensure your scheduled tasks or cron also run a queue worker (for example via a `queue:work` command inside `app/Console/Kernel.php`).
+If you later change `QUEUE_CONNECTION` from `sync` to `database`, also schedule a queue worker (e.g. `php artisan queue:work --stop-when-empty` driven by cron).
 
 ---
 
-## 4. Updating the application (subsequent deploys)
+## 6. Updating the application (subsequent deploys)
 
 When you push new code to GitHub and want to update the site:
 
-1. SSH into SiteGround and go to the project:
+1. **On Ubuntu** — push your latest commits:
 
    ```bash
+   git push origin main
+   ```
+
+2. **SSH into SiteGround** and go to the project:
+
+   ```bash
+   ssh siteground          # or: ssh -i ~/.ssh/siteground -p 18765 USER@HOST
    cd ~/www/cars-search.artworkwebsite.com/cars-images-api
    ```
 
-2. Pull the latest changes from the branch you are using (e.g. `main`):
+3. Pull the latest changes:
 
    ```bash
    git pull origin main
    ```
 
-3. Install/update Composer dependencies:
+4. Install/update Composer dependencies:
 
    ```bash
    composer install --no-dev --optimize-autoloader
    ```
 
-4. Run any new migrations:
+5. Run any new migrations:
 
    ```bash
    php artisan migrate --force
    ```
 
-5. Rebuild caches (good practice after config or route changes):
+6. Rebuild caches (good practice after config or route changes):
 
    ```bash
    php artisan config:cache
@@ -352,7 +465,7 @@ When you push new code to GitHub and want to update the site:
    php artisan view:cache
    ```
 
-6. (Optional) Clear any old caches before re-caching if you run into issues:
+7. (Optional) Clear any old caches before re-caching if you run into issues:
 
    ```bash
    php artisan config:clear
@@ -363,7 +476,7 @@ When you push new code to GitHub and want to update the site:
 
 ---
 
-## 5. Troubleshooting tips
+## 7. Troubleshooting tips
 
 - **Blank page or 500 error**
   - Check `storage/logs/laravel.log` for detailed error messages:
@@ -372,6 +485,12 @@ When you push new code to GitHub and want to update the site:
     cd ~/www/cars-search.artworkwebsite.com/cars-images-api
     tail -f storage/logs/laravel.log
     ```
+
+- **`composer install` fails with a PHP version error**
+  - The app needs PHP 8.3+. Check `php -v`, and set the version in **Site Tools → Devs → PHP Manager** (Section 1.2).
+
+- **`Permission denied (publickey)` when connecting via SSH**
+  - Confirm `chmod 600 ~/.ssh/siteground`, that you passed `-i ~/.ssh/siteground` and `-p 18765`, and that the key exists in **Site Tools → Devs → SSH Keys Manager**.
 
 - **Permissions issues / cannot write to storage**
   - Re-apply permissions:
@@ -403,4 +522,4 @@ When you push new code to GitHub and want to update the site:
     php artisan view:cache
     ```
 
-This guide should be all you need to deploy and maintain the `cars-images-api` project on SiteGround under `cars-search.artworkwebsite.com` via SSH, following Laravel best practices for a shared-hosting environment.
+This guide should be all you need to deploy and maintain the `cars-images-api` project on SiteGround under `cars-search.artworkwebsite.com`, from an Ubuntu workstation, following Laravel best practices for a shared-hosting environment.
