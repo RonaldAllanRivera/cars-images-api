@@ -1,8 +1,28 @@
 # Web-Optimized Bulk Download ZIP — Design
 
 **Date:** 2026-05-21
-**Status:** Approved (pending implementation plan)
+**Status:** Implemented — with a correction (see below)
 **Project:** cars-images-api (Laravel 12 + Filament 4)
+
+## Correction (post-implementation)
+
+This design assumed Wikimedia serves a thumbnail at **any** width via a
+constructed URL. That is false: `upload.wikimedia.org` returns **HTTP 400**
+for thumbnail widths it has not already generated (verified — 640/800/1600 px
+all 400; only the API-generated 1280 px works).
+
+What was actually shipped: the bulk ZIP downloads each image's stored
+`thumbnail_url` — the ~1280 px thumbnail Wikimedia generated via the API
+(`iiurlwidth`) when the image was found — and falls back to the original on
+failure. This still yields ~85 % smaller ZIPs (verified: 10.94 MB → 1.63 MB
+for 4 images) with zero server-side processing.
+
+Dropped from the original design: the `download_max_width` config and the
+`WikimediaThumbnailUrlBuilder` (arbitrary-width URL construction does not
+work). A configurable width would require batched MediaWiki API calls
+(`iiurlwidth`) at download time — recorded as a future option, not built.
+
+The sections below are the original (pre-correction) design, kept for history.
 
 ## Goal
 

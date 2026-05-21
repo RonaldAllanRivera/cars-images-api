@@ -28,20 +28,14 @@ return [
     | Bulk download image sizing
     |--------------------------------------------------------------------------
     |
-    | Maximum width (in pixels) for images placed in the bulk-download ZIP.
-    | Images are fetched from Wikimedia's thumbnail CDN at this width, so no
-    | image processing happens on this server.
+    | The bulk-download ZIP uses each image's pre-generated Wikimedia
+    | thumbnail (~1280px wide, ~85-90% smaller than the original) rather
+    | than the full-resolution file. There is no width setting because
+    | Wikimedia returns HTTP 400 for arbitrary-width thumbnail URLs — only
+    | widths it has already generated (via the API's iiurlwidth) are served.
     |
-    | Common choices:
-    |   1280  - typical web content width, smallest files
-    |   1600  - default; good size/quality balance
-    |   1920  - full-HD, sharper but larger
-    |
-    | Future options to consider (not implemented):
-    |   - a null value meaning "download originals, unoptimized"
-    |   - a per-download width chosen in the UI
-    |   - server-side WebP conversion for further savings
+    | Future option (not implemented): a configurable download width would
+    | require batched MediaWiki API calls (iiurlwidth) at download time.
     |
     */
-    'download_max_width' => env('CARS_DOWNLOAD_MAX_WIDTH', 1600),
 ];

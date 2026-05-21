@@ -143,12 +143,14 @@ class BatchZipBuilderTest extends TestCase
         $this->assertSame(0, $added);
     }
 
-    public function test_fetches_width_capped_wikimedia_thumbnail(): void
+    public function test_fetches_stored_thumbnail_not_the_original(): void
     {
-        config(['cars-images.download_max_width' => 1600]);
+        $thumbUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Foo.jpg/1280px-Foo.jpg';
+        $originalUrl = 'https://upload.wikimedia.org/wikipedia/commons/4/47/Foo.jpg';
 
         Http::fake([
-            '*' => Http::response('IMG', 200),
+            $thumbUrl => Http::response('THUMB', 200),
+            $originalUrl => Http::response('ORIGINAL', 200),
         ]);
 
         $user = User::factory()->create();
@@ -162,28 +164,26 @@ class BatchZipBuilderTest extends TestCase
             'car_search_id' => $search->id, 'provider' => 'wikimedia',
             'provider_image_id' => 'A', 'make' => 'Acura', 'model' => 'NSX',
             'year' => 1999, 'title' => 'A',
-            'source_url' => 'https://upload.wikimedia.org/wikipedia/commons/4/47/Foo.jpg',
-            'thumbnail_url' => 'https://upload.wikimedia.org/wikipedia/commons/4/47/Foo.jpg',
+            'source_url' => $originalUrl,
+            'thumbnail_url' => $thumbUrl,
             'width' => 4000, 'height' => 3000, 'download_status' => 'not_downloaded',
         ]);
 
         $tmpFile = tempnam(sys_get_temp_dir(), 'zip');
         $added = app(BatchZipBuilder::class)->buildToFile(collect([$img]), $tmpFile);
-        @unlink($tmpFile);
 
         $this->assertSame(1, $added);
 
-        Http::assertSent(function ($request) {
-            return $request->url()
-                === 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Foo.jpg/1600px-Foo.jpg';
-        });
+        $zip = new ZipArchive();
+        $zip->open($tmpFile);
+        $this->assertSame('THUMB', $zip->getFromName('1999 Acura NSX.jpg'));
+        $zip->close();
+        @unlink($tmpFile);
     }
 
     public function test_falls_back_to_original_when_thumbnail_fetch_fails(): void
     {
-        config(['cars-images.download_max_width' => 1600]);
-
-        $thumbUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Foo.jpg/1600px-Foo.jpg';
+        $thumbUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Foo.jpg/1280px-Foo.jpg';
         $originalUrl = 'https://upload.wikimedia.org/wikipedia/commons/4/47/Foo.jpg';
 
         Http::fake([
@@ -203,7 +203,7 @@ class BatchZipBuilderTest extends TestCase
             'provider_image_id' => 'A', 'make' => 'Acura', 'model' => 'NSX',
             'year' => 1999, 'title' => 'A',
             'source_url' => $originalUrl,
-            'thumbnail_url' => $originalUrl,
+            'thumbnail_url' => $thumbUrl,
             'width' => 4000, 'height' => 3000, 'download_status' => 'not_downloaded',
         ]);
 
