@@ -27,7 +27,16 @@ class CarImageBulkDownloadController extends Controller
             ->get();
 
         $tmpPath = tempnam(sys_get_temp_dir(), 'cars-batch-');
-        $builder->buildToFile($images, $tmpPath);
+        $added = $builder->buildToFile($images, $tmpPath);
+
+        if ($added === 0) {
+            // ZipArchive writes no file for an empty archive — there is
+            // nothing to serve. Fail cleanly instead of 500-ing on a
+            // missing file.
+            @unlink($tmpPath);
+
+            abort(422, 'None of the selected images could be downloaded from Wikimedia. Please try again in a moment.');
+        }
 
         CarImage::whereIn('id', $images->pluck('id'))->update(['download_status' => 'downloaded']);
 

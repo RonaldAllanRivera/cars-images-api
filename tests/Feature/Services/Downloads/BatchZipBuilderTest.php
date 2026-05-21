@@ -60,7 +60,9 @@ class BatchZipBuilderTest extends TestCase
         $tmpFile = tempnam(sys_get_temp_dir(), 'zip');
 
         $builder = app(BatchZipBuilder::class);
-        $builder->buildToFile(collect([$img1, $img2]), $tmpFile);
+        $added = $builder->buildToFile(collect([$img1, $img2]), $tmpFile);
+
+        $this->assertSame(2, $added);
 
         $zip = new ZipArchive();
         $opened = $zip->open($tmpFile);
@@ -79,5 +81,65 @@ class BatchZipBuilderTest extends TestCase
 
         $zip->close();
         unlink($tmpFile);
+    }
+
+    public function test_sends_descriptive_user_agent_when_fetching_images(): void
+    {
+        Http::fake([
+            '*' => Http::response('AAAA', 200),
+        ]);
+
+        $user = User::factory()->create();
+        $search = CarSearch::create([
+            'make' => 'Toyota', 'model' => 'RAV4',
+            'from_year' => 1997, 'to_year' => 1997,
+            'transparent_background' => false, 'images_per_year' => 5,
+            'status' => 'completed', 'requested_by' => $user->id,
+        ]);
+        $img = CarImage::create([
+            'car_search_id' => $search->id, 'provider' => 'wikimedia',
+            'provider_image_id' => 'A', 'make' => 'Toyota', 'model' => 'RAV4',
+            'year' => 1997, 'title' => 'A', 'source_url' => 'https://upload.wikimedia.org/a.jpg',
+            'thumbnail_url' => 'https://upload.wikimedia.org/a.jpg',
+            'width' => 800, 'height' => 600, 'download_status' => 'not_downloaded',
+        ]);
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'zip');
+        app(BatchZipBuilder::class)->buildToFile(collect([$img]), $tmpFile);
+        @unlink($tmpFile);
+
+        Http::assertSent(function ($request) {
+            $ua = $request->header('User-Agent')[0] ?? '';
+
+            return str_contains($ua, 'CarsImagesApi');
+        });
+    }
+
+    public function test_returns_zero_when_all_image_fetches_fail(): void
+    {
+        Http::fake([
+            '*' => Http::response('Forbidden', 403),
+        ]);
+
+        $user = User::factory()->create();
+        $search = CarSearch::create([
+            'make' => 'Toyota', 'model' => 'RAV4',
+            'from_year' => 1997, 'to_year' => 1997,
+            'transparent_background' => false, 'images_per_year' => 5,
+            'status' => 'completed', 'requested_by' => $user->id,
+        ]);
+        $img = CarImage::create([
+            'car_search_id' => $search->id, 'provider' => 'wikimedia',
+            'provider_image_id' => 'A', 'make' => 'Toyota', 'model' => 'RAV4',
+            'year' => 1997, 'title' => 'A', 'source_url' => 'https://upload.wikimedia.org/a.jpg',
+            'thumbnail_url' => 'https://upload.wikimedia.org/a.jpg',
+            'width' => 800, 'height' => 600, 'download_status' => 'not_downloaded',
+        ]);
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'zip');
+        $added = app(BatchZipBuilder::class)->buildToFile(collect([$img]), $tmpFile);
+        @unlink($tmpFile);
+
+        $this->assertSame(0, $added);
     }
 }

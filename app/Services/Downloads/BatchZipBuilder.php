@@ -18,8 +18,12 @@ class BatchZipBuilder
     /**
      * Build a ZIP at $targetPath containing each image renamed.
      * Image binaries are fetched from CarImage::source_url via HTTP.
+     *
+     * Returns the number of images actually written into the archive.
+     * When that is 0, ZipArchive writes no file at all — callers must
+     * check the return value before trying to serve $targetPath.
      */
-    public function buildToFile(Collection $images, string $targetPath): void
+    public function buildToFile(Collection $images, string $targetPath): int
     {
         $zip = new ZipArchive();
         $opened = $zip->open($targetPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
@@ -27,32 +31,44 @@ class BatchZipBuilder
             throw new RuntimeException("Cannot open ZIP at {$targetPath}: code {$opened}");
         }
 
+        // Wikimedia's upload host (upload.wikimedia.org) returns HTTP 403 to
+        // requests without a descriptive User-Agent, so binary fetches must
+        // send the same UA the rest of the app uses.
+        $userAgent = (string) config('images.wikimedia.user_agent', 'CarsImagesApi/1.0 (Laravel)');
+
         $usedNames = [];
         $baseCounters = [];
+        $added = 0;
 
         foreach ($images as $image) {
             /** @var CarImage $image */
-            $extension = $this->extensionFromUrl($image->source_url);
+            $response = Http::withHeaders(['User-Agent' => $userAgent])
+                ->timeout(30)
+                ->get($image->source_url);
 
-            $filename = $this->buildUniqueByBase(
-                (int) $image->year,
-                (string) $image->make,
-                (string) $image->model,
-                $extension,
-                $usedNames,
-                $baseCounters,
-            );
-
-            $response = Http::timeout(30)->get($image->source_url);
             if (! $response->successful()) {
                 // Skip individual fetch failures rather than aborting the whole ZIP.
                 continue;
             }
 
+            // Only consume a filename/counter once the fetch has succeeded, so
+            // skipped images never leave gaps in the duplicate-suffix sequence.
+            $filename = $this->buildUniqueByBase(
+                (int) $image->year,
+                (string) $image->make,
+                (string) $image->model,
+                $this->extensionFromUrl($image->source_url),
+                $usedNames,
+                $baseCounters,
+            );
+
             $zip->addFromString($filename, $response->body());
+            $added++;
         }
 
         $zip->close();
+
+        return $added;
     }
 
     /**

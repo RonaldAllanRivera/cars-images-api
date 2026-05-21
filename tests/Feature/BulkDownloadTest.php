@@ -70,6 +70,36 @@ class BulkDownloadTest extends TestCase
         $this->assertStringContainsString('.zip', $disposition);
     }
 
+    public function test_zip_endpoint_fails_cleanly_when_no_images_downloadable(): void
+    {
+        // Every image fetch is rejected by the provider (e.g. 403).
+        Http::fake([
+            '*' => Http::response('Forbidden', 403),
+        ]);
+
+        $user = User::factory()->create();
+        $search = CarSearch::create([
+            'make' => 'Toyota', 'model' => 'RAV4',
+            'from_year' => 1997, 'to_year' => 1997,
+            'transparent_background' => false, 'images_per_year' => 5,
+            'status' => 'completed', 'requested_by' => $user->id,
+        ]);
+        $img = CarImage::create([
+            'car_search_id' => $search->id, 'provider' => 'wikimedia',
+            'provider_image_id' => 'A', 'make' => 'Toyota', 'model' => 'RAV4',
+            'year' => 1997, 'title' => 'A', 'source_url' => 'https://upload.wikimedia.org/a.jpg',
+            'thumbnail_url' => 'https://upload.wikimedia.org/a.jpg',
+            'width' => 800, 'height' => 600, 'download_status' => 'not_downloaded',
+        ]);
+
+        $response = $this->actingAs($user)->post('/batch-downloads/zip', [
+            'image_ids' => [$img->id],
+        ]);
+
+        // A clean 422 — not a 500 FileNotFoundException on a missing temp file.
+        $response->assertStatus(422);
+    }
+
     public function test_csv_endpoint_returns_manifest_with_renamed_filenames(): void
     {
         [$user, $images] = $this->setupBatchWithTwoImages();
