@@ -142,4 +142,80 @@ class BatchZipBuilderTest extends TestCase
 
         $this->assertSame(0, $added);
     }
+
+    public function test_fetches_width_capped_wikimedia_thumbnail(): void
+    {
+        config(['cars-images.download_max_width' => 1600]);
+
+        Http::fake([
+            '*' => Http::response('IMG', 200),
+        ]);
+
+        $user = User::factory()->create();
+        $search = CarSearch::create([
+            'make' => 'Acura', 'model' => 'NSX',
+            'from_year' => 1999, 'to_year' => 1999,
+            'transparent_background' => false, 'images_per_year' => 5,
+            'status' => 'completed', 'requested_by' => $user->id,
+        ]);
+        $img = CarImage::create([
+            'car_search_id' => $search->id, 'provider' => 'wikimedia',
+            'provider_image_id' => 'A', 'make' => 'Acura', 'model' => 'NSX',
+            'year' => 1999, 'title' => 'A',
+            'source_url' => 'https://upload.wikimedia.org/wikipedia/commons/4/47/Foo.jpg',
+            'thumbnail_url' => 'https://upload.wikimedia.org/wikipedia/commons/4/47/Foo.jpg',
+            'width' => 4000, 'height' => 3000, 'download_status' => 'not_downloaded',
+        ]);
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'zip');
+        $added = app(BatchZipBuilder::class)->buildToFile(collect([$img]), $tmpFile);
+        @unlink($tmpFile);
+
+        $this->assertSame(1, $added);
+
+        Http::assertSent(function ($request) {
+            return $request->url()
+                === 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Foo.jpg/1600px-Foo.jpg';
+        });
+    }
+
+    public function test_falls_back_to_original_when_thumbnail_fetch_fails(): void
+    {
+        config(['cars-images.download_max_width' => 1600]);
+
+        $thumbUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Foo.jpg/1600px-Foo.jpg';
+        $originalUrl = 'https://upload.wikimedia.org/wikipedia/commons/4/47/Foo.jpg';
+
+        Http::fake([
+            $thumbUrl => Http::response('boom', 500),
+            $originalUrl => Http::response('ORIGINAL', 200),
+        ]);
+
+        $user = User::factory()->create();
+        $search = CarSearch::create([
+            'make' => 'Acura', 'model' => 'NSX',
+            'from_year' => 1999, 'to_year' => 1999,
+            'transparent_background' => false, 'images_per_year' => 5,
+            'status' => 'completed', 'requested_by' => $user->id,
+        ]);
+        $img = CarImage::create([
+            'car_search_id' => $search->id, 'provider' => 'wikimedia',
+            'provider_image_id' => 'A', 'make' => 'Acura', 'model' => 'NSX',
+            'year' => 1999, 'title' => 'A',
+            'source_url' => $originalUrl,
+            'thumbnail_url' => $originalUrl,
+            'width' => 4000, 'height' => 3000, 'download_status' => 'not_downloaded',
+        ]);
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'zip');
+        $added = app(BatchZipBuilder::class)->buildToFile(collect([$img]), $tmpFile);
+
+        $this->assertSame(1, $added);
+
+        $zip = new ZipArchive();
+        $zip->open($tmpFile);
+        $this->assertSame('ORIGINAL', $zip->getFromName('1999 Acura NSX.jpg'));
+        $zip->close();
+        @unlink($tmpFile);
+    }
 }

@@ -3,6 +3,8 @@
 namespace App\Services\Downloads;
 
 use App\Models\CarImage;
+use App\Services\Images\WikimediaThumbnailUrlBuilder;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -12,6 +14,7 @@ class BatchZipBuilder
 {
     public function __construct(
         protected FilenameBuilder $filenames,
+        protected WikimediaThumbnailUrlBuilder $thumbnailUrls,
     ) {
     }
 
@@ -36,17 +39,17 @@ class BatchZipBuilder
         // send the same UA the rest of the app uses.
         $userAgent = (string) config('images.wikimedia.user_agent', 'CarsImagesApi/1.0 (Laravel)');
 
+        $maxWidth = (int) config('cars-images.download_max_width', 1600);
+
         $usedNames = [];
         $baseCounters = [];
         $added = 0;
 
         foreach ($images as $image) {
             /** @var CarImage $image */
-            $response = Http::withHeaders(['User-Agent' => $userAgent])
-                ->timeout(30)
-                ->get($image->source_url);
+            $response = $this->fetchImageBinary((string) $image->source_url, $userAgent, $maxWidth);
 
-            if (! $response->successful()) {
+            if ($response === null) {
                 // Skip individual fetch failures rather than aborting the whole ZIP.
                 continue;
             }
@@ -69,6 +72,39 @@ class BatchZipBuilder
         $zip->close();
 
         return $added;
+    }
+
+    /**
+     * Fetch an image binary, preferring a web-sized Wikimedia thumbnail.
+     *
+     * When the thumbnail fetch fails, falls back to the original URL so an
+     * image is never silently dropped. Returns null only when both fail.
+     */
+    private function fetchImageBinary(string $sourceUrl, string $userAgent, int $maxWidth): ?Response
+    {
+        $thumbnailUrl = $this->thumbnailUrls->forWidth($sourceUrl, $maxWidth);
+
+        $response = Http::withHeaders(['User-Agent' => $userAgent])
+            ->timeout(30)
+            ->get($thumbnailUrl);
+
+        if ($response->successful()) {
+            return $response;
+        }
+
+        // The thumbnail URL was a transformed one and it failed — retry the
+        // untouched original before giving up on this image.
+        if ($thumbnailUrl !== $sourceUrl) {
+            $original = Http::withHeaders(['User-Agent' => $userAgent])
+                ->timeout(30)
+                ->get($sourceUrl);
+
+            if ($original->successful()) {
+                return $original;
+            }
+        }
+
+        return null;
     }
 
     /**
