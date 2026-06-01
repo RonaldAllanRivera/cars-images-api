@@ -3,6 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Models\CarImage;
+use App\Services\Downloads\BatchCsvExporter;
+use App\Services\Downloads\BatchZipBuilder;
 use BackedEnum;
 use Filament\Actions;
 use Filament\Notifications\Notification;
@@ -14,6 +16,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use UnitEnum;
 
 class Results extends Page implements HasTable
@@ -88,30 +91,49 @@ class Results extends Page implements HasTable
                 Actions\BulkAction::make('downloadZip')
                     ->label('Download Selected as ZIP')
                     ->icon('heroicon-o-archive-box-arrow-down')
-                    ->action(function ($records) {
-                        $ids = $records->pluck('id')->all();
-                        $url = route('batch-downloads.zip');
+                    ->action(function (Collection $records, BatchZipBuilder $builder) {
+                        $images = $records->loadMissing('search');
 
-                        $this->dispatch('post-download', url: $url, ids: $ids);
+                        $tmpPath = tempnam(sys_get_temp_dir(), 'cars-batch-');
+                        $added = $builder->buildToFile($images, $tmpPath);
 
-                        Notification::make()
-                            ->title('Preparing ZIP…')
-                            ->success()
-                            ->send();
+                        if ($added === 0) {
+                            @unlink($tmpPath);
+
+                            Notification::make()
+                                ->title('No images could be downloaded')
+                                ->body('None of the selected images could be fetched from Wikimedia. Please try again in a moment.')
+                                ->danger()
+                                ->send();
+
+                            return null;
+                        }
+
+                        CarImage::whereIn('id', $images->pluck('id'))
+                            ->update(['download_status' => 'downloaded']);
+
+                        $filename = 'cars-batch-' . now()->format('Ymd-His') . '.zip';
+
+                        return response()->download($tmpPath, $filename, [
+                            'Content-Type' => 'application/zip',
+                        ])->deleteFileAfterSend(true);
                     }),
                 Actions\BulkAction::make('exportCsv')
                     ->label('Export Selected as CSV')
                     ->icon('heroicon-o-document-arrow-down')
-                    ->action(function ($records) {
-                        $ids = $records->pluck('id')->all();
-                        $url = route('batch-downloads.csv');
+                    ->action(function (Collection $records, BatchCsvExporter $exporter) {
+                        $images = $records->loadMissing('search');
+                        $filename = 'cars-batch-' . now()->format('Ymd-His') . '.csv';
 
-                        $this->dispatch('post-download', url: $url, ids: $ids);
-
-                        Notification::make()
-                            ->title('Preparing CSV…')
-                            ->success()
-                            ->send();
+                        return response()->streamDownload(
+                            function () use ($exporter, $images) {
+                                $handle = fopen('php://output', 'w');
+                                $exporter->streamTo($handle, $images);
+                                fclose($handle);
+                            },
+                            $filename,
+                            ['Content-Type' => 'text/csv; charset=UTF-8'],
+                        );
                     }),
                 Actions\DeleteBulkAction::make(),
             ])

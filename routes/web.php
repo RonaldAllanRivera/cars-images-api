@@ -2,7 +2,6 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CarImageDownloadController;
-use App\Http\Controllers\CarImageBulkDownloadController;
 
 Route::get('/', function () {
     return redirect('/admin');
@@ -11,10 +10,8 @@ Route::get('/', function () {
 Route::middleware(['auth'])->group(function () {
     Route::get('/car-images/{carImage}/download', CarImageDownloadController::class)
         ->name('car-images.download');
-
-    Route::post('/batch-downloads/zip', [CarImageBulkDownloadController::class, 'zip'])
-        ->name('batch-downloads.zip');
-
-    Route::post('/batch-downloads/csv', [CarImageBulkDownloadController::class, 'csv'])
-        ->name('batch-downloads.csv');
 });
+
+// Bulk ZIP / CSV downloads are served directly by the Results Filament page
+// (App\Filament\Pages\Results) via Livewire download responses, so they need
+// no dedicated routes or controller.
