@@ -4,23 +4,39 @@
 **Status:** Implemented — with a correction (see below)
 **Project:** cars-images-api (Laravel 12 + Filament 4)
 
-## Correction (post-implementation)
+## Correction 2 (production reality — server-side resize)
 
-This design assumed Wikimedia serves a thumbnail at **any** width via a
-constructed URL. That is false: `upload.wikimedia.org` returns **HTTP 400**
-for thumbnail widths it has not already generated (verified — 640/800/1600 px
-all 400; only the API-generated 1280 px works).
+The thumbnail approach below works from a residential IP (local dev) but
+**fails in production**. Verified from the SiteGround server: every
+`upload.wikimedia.org/.../thumb/...` URL returns **HTTP 400**, at every
+width, for every image. Wikimedia serves pre-sized thumbnails to ordinary
+visitors but **blocks on-demand thumbnail generation from datacenter /
+shared-hosting IPs**. Separately, the production `.env` carried a generic
+User-Agent, which Wikimedia **rate-limits (HTTP 429)**; a contactable UA
+returns 200 for originals.
 
-What was actually shipped: the bulk ZIP downloads each image's stored
-`thumbnail_url` — the ~1280 px thumbnail Wikimedia generated via the API
-(`iiurlwidth`) when the image was found — and falls back to the original on
-failure. This still yields ~85 % smaller ZIPs (verified: 10.94 MB → 1.63 MB
-for 4 images) with zero server-side processing.
+**What is now shipped:**
+- `BatchZipBuilder` downloads each image's full-resolution `source_url`
+  (with the contactable User-Agent) and resizes it **on our own server**
+  via a new `App\Services\Downloads\ImageResizer` (GD), re-encoding as JPEG
+  at `cars-images.download_jpeg_quality` (default 82), capped at
+  `cars-images.download_max_width` (default 1600). Images already within
+  the width are recompressed but not upscaled; non-image data is passed
+  through untouched.
+- `cars-images.download_max_width` is reinstated (plus `download_jpeg_quality`).
+- The Wikimedia-thumbnail path and `WikimediaThumbnailUrlBuilder` are gone.
+- Production `WIKIMEDIA_USER_AGENT` must be the contactable form
+  (`CarsImagesApi/1.0 (https://cars-search.artworkwebsite.com; <email>)`).
 
-Dropped from the original design: the `download_max_width` config and the
-`WikimediaThumbnailUrlBuilder` (arbitrary-width URL construction does not
-work). A configurable width would require batched MediaWiki API calls
-(`iiurlwidth`) at download time — recorded as a future option, not built.
+This is the robust approach: it does not depend on Wikimedia resizing for
+us, so it works on any host. GD is available on SiteGround (JPEG + WebP,
+768M memory). WebP output is a noted future option.
+
+## Correction 1 (superseded by Correction 2)
+
+The first correction switched from arbitrary-width thumbnail URLs to each
+image's stored `thumbnail_url`. That still relied on Wikimedia serving the
+thumbnail, which production blocks — hence Correction 2.
 
 The sections below are the original (pre-correction) design, kept for history.
 

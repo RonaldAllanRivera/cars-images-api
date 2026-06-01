@@ -3,7 +3,6 @@
 namespace App\Services\Downloads;
 
 use App\Models\CarImage;
-use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -13,12 +12,19 @@ class BatchZipBuilder
 {
     public function __construct(
         protected FilenameBuilder $filenames,
+        protected ImageResizer $resizer,
     ) {
     }
 
     /**
-     * Build a ZIP at $targetPath containing each image renamed.
-     * Image binaries are fetched web-sized (see fetchImageBinary()).
+     * Build a ZIP at $targetPath containing each image, renamed and resized
+     * down to a web-friendly width.
+     *
+     * Images are downloaded at full resolution from Wikimedia's upload host
+     * and then resized on this server (see ImageResizer). We do NOT use
+     * Wikimedia's thumbnail CDN: it returns HTTP 400 for thumbnail requests
+     * from datacenter / shared-hosting IPs, so server-side resizing is the
+     * only approach that works in production.
      *
      * Returns the number of images actually written into the archive.
      * When that is 0, ZipArchive writes no file at all — callers must
@@ -32,10 +38,12 @@ class BatchZipBuilder
             throw new RuntimeException("Cannot open ZIP at {$targetPath}: code {$opened}");
         }
 
-        // Wikimedia's upload host (upload.wikimedia.org) returns HTTP 403 to
-        // requests without a descriptive User-Agent, so binary fetches must
-        // send the same UA the rest of the app uses.
+        // upload.wikimedia.org rejects requests without a descriptive,
+        // contactable User-Agent (HTTP 429/403 per Wikimedia's UA policy),
+        // so binary fetches must send the same UA the rest of the app uses.
         $userAgent = (string) config('images.wikimedia.user_agent', 'CarsImagesApi/1.0 (Laravel)');
+        $maxWidth = (int) config('cars-images.download_max_width', 1600);
+        $quality = (int) config('cars-images.download_jpeg_quality', 82);
 
         $usedNames = [];
         $baseCounters = [];
@@ -43,12 +51,21 @@ class BatchZipBuilder
 
         foreach ($images as $image) {
             /** @var CarImage $image */
-            $response = $this->fetchImageBinary($image, $userAgent);
+            $response = Http::withHeaders(['User-Agent' => $userAgent])
+                ->timeout(30)
+                ->get((string) $image->source_url);
 
-            if ($response === null) {
+            if (! $response->successful()) {
                 // Skip individual fetch failures rather than aborting the whole ZIP.
                 continue;
             }
+
+            [$bytes, $extension] = $this->resizer->resize(
+                $response->body(),
+                $maxWidth,
+                $this->extensionFromUrl((string) $image->source_url),
+                $quality,
+            );
 
             // Only consume a filename/counter once the fetch has succeeded, so
             // skipped images never leave gaps in the duplicate-suffix sequence.
@@ -56,61 +73,18 @@ class BatchZipBuilder
                 (int) $image->year,
                 (string) $image->make,
                 (string) $image->model,
-                $this->extensionFromUrl($image->source_url),
+                $extension,
                 $usedNames,
                 $baseCounters,
             );
 
-            $zip->addFromString($filename, $response->body());
+            $zip->addFromString($filename, $bytes);
             $added++;
         }
 
         $zip->close();
 
         return $added;
-    }
-
-    /**
-     * Fetch an image binary, preferring the web-sized thumbnail.
-     *
-     * Each CarImage stores `thumbnail_url` — the ~1280px thumbnail Wikimedia
-     * generated when the image was found (via the API's iiurlwidth). It is
-     * ~85-90% smaller than the full-resolution original.
-     *
-     * Note: Wikimedia will NOT generate an arbitrary-width thumbnail from a
-     * constructed URL — direct requests for non-pre-generated widths return
-     * HTTP 400. A future configurable download width would require batched
-     * MediaWiki API calls (iiurlwidth) at download time.
-     *
-     * Falls back to the full-resolution `source_url` when the thumbnail is
-     * absent or its fetch fails, so an image is never silently dropped.
-     * Returns null only when every attempt fails.
-     */
-    private function fetchImageBinary(CarImage $image, string $userAgent): ?Response
-    {
-        $sourceUrl = (string) $image->source_url;
-        $thumbnailUrl = (string) ($image->thumbnail_url ?: $sourceUrl);
-
-        $response = Http::withHeaders(['User-Agent' => $userAgent])
-            ->timeout(30)
-            ->get($thumbnailUrl);
-
-        if ($response->successful()) {
-            return $response;
-        }
-
-        // Thumbnail fetch failed — retry the original before giving up.
-        if ($thumbnailUrl !== $sourceUrl) {
-            $original = Http::withHeaders(['User-Agent' => $userAgent])
-                ->timeout(30)
-                ->get($sourceUrl);
-
-            if ($original->successful()) {
-                return $original;
-            }
-        }
-
-        return null;
     }
 
     /**

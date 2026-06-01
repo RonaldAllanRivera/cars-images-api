@@ -143,14 +143,16 @@ class BatchZipBuilderTest extends TestCase
         $this->assertSame(0, $added);
     }
 
-    public function test_fetches_stored_thumbnail_not_the_original(): void
+    public function test_fetches_the_original_source_url_not_the_thumbnail(): void
     {
+        // Wikimedia blocks thumbnail generation from the server, so the
+        // builder must fetch the full-resolution source and resize locally.
         $thumbUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Foo.jpg/1280px-Foo.jpg';
         $originalUrl = 'https://upload.wikimedia.org/wikipedia/commons/4/47/Foo.jpg';
 
         Http::fake([
-            $thumbUrl => Http::response('THUMB', 200),
-            $originalUrl => Http::response('ORIGINAL', 200),
+            $originalUrl => Http::response($this->jpegBytes(2000, 1500), 200),
+            $thumbUrl => Http::response('boom', 500),
         ]);
 
         $user = User::factory()->create();
@@ -166,29 +168,26 @@ class BatchZipBuilderTest extends TestCase
             'year' => 1999, 'title' => 'A',
             'source_url' => $originalUrl,
             'thumbnail_url' => $thumbUrl,
-            'width' => 4000, 'height' => 3000, 'download_status' => 'not_downloaded',
+            'width' => 2000, 'height' => 1500, 'download_status' => 'not_downloaded',
         ]);
 
         $tmpFile = tempnam(sys_get_temp_dir(), 'zip');
         $added = app(BatchZipBuilder::class)->buildToFile(collect([$img]), $tmpFile);
+        @unlink($tmpFile);
 
         $this->assertSame(1, $added);
 
-        $zip = new ZipArchive();
-        $zip->open($tmpFile);
-        $this->assertSame('THUMB', $zip->getFromName('1999 Acura NSX.jpg'));
-        $zip->close();
-        @unlink($tmpFile);
+        // Only the source URL should have been requested — never the thumbnail.
+        Http::assertSent(fn ($request) => $request->url() === $originalUrl);
+        Http::assertNotSent(fn ($request) => $request->url() === $thumbUrl);
     }
 
-    public function test_falls_back_to_original_when_thumbnail_fetch_fails(): void
+    public function test_resizes_large_images_down_in_the_zip(): void
     {
-        $thumbUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/Foo.jpg/1280px-Foo.jpg';
-        $originalUrl = 'https://upload.wikimedia.org/wikipedia/commons/4/47/Foo.jpg';
+        config(['cars-images.download_max_width' => 1600]);
 
         Http::fake([
-            $thumbUrl => Http::response('boom', 500),
-            $originalUrl => Http::response('ORIGINAL', 200),
+            '*' => Http::response($this->jpegBytes(3000, 2000), 200),
         ]);
 
         $user = User::factory()->create();
@@ -202,20 +201,35 @@ class BatchZipBuilderTest extends TestCase
             'car_search_id' => $search->id, 'provider' => 'wikimedia',
             'provider_image_id' => 'A', 'make' => 'Acura', 'model' => 'NSX',
             'year' => 1999, 'title' => 'A',
-            'source_url' => $originalUrl,
-            'thumbnail_url' => $thumbUrl,
-            'width' => 4000, 'height' => 3000, 'download_status' => 'not_downloaded',
+            'source_url' => 'https://upload.wikimedia.org/wikipedia/commons/4/47/Foo.jpg',
+            'thumbnail_url' => null,
+            'width' => 3000, 'height' => 2000, 'download_status' => 'not_downloaded',
         ]);
 
         $tmpFile = tempnam(sys_get_temp_dir(), 'zip');
-        $added = app(BatchZipBuilder::class)->buildToFile(collect([$img]), $tmpFile);
-
-        $this->assertSame(1, $added);
+        app(BatchZipBuilder::class)->buildToFile(collect([$img]), $tmpFile);
 
         $zip = new ZipArchive();
         $zip->open($tmpFile);
-        $this->assertSame('ORIGINAL', $zip->getFromName('1999 Acura NSX.jpg'));
+        $entry = $zip->getFromName('1999 Acura NSX.jpg');
         $zip->close();
         @unlink($tmpFile);
+
+        $this->assertNotFalse($entry, 'ZIP should contain the resized image');
+
+        $decoded = imagecreatefromstring($entry);
+        $this->assertSame(1600, imagesx($decoded), 'image should be resized to the configured max width');
+        imagedestroy($decoded);
+    }
+
+    private function jpegBytes(int $width, int $height): string
+    {
+        $img = imagecreatetruecolor($width, $height);
+        ob_start();
+        imagejpeg($img);
+        $bytes = ob_get_clean();
+        imagedestroy($img);
+
+        return $bytes;
     }
 }
