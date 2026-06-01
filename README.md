@@ -37,11 +37,15 @@ It is designed as an internal tool and portfolio project to demonstrate:
 
 ## Tech stack
 
-- **Backend**: Laravel 12 (PHP 8.2+)
+- **Backend**: Laravel 12 (PHP 8.3+)
 - **Admin UI**: Filament 4 panel
 - **External API**: MediaWiki / Wikimedia Commons
-- **Database**: MySQL (Laragon in local dev)
-- **Storage**: Laravel `storage` with a dedicated `cars` disk for future downloads
+- **Database**: MySQL 8 (Docker for local dev — see "Getting started with Docker" below)
+- **Storage**: Laravel `storage` with a dedicated `cars` disk for downloads
+
+> Kept current on the latest Laravel 12.x / Filament 4.x releases. Laravel 13 is
+> not yet adopted because Filament 4 and Livewire 3 do not support it yet; the
+> upgrade will follow once that ecosystem ships Laravel 13 compatibility.
 
 ---
 
@@ -106,7 +110,7 @@ Then open `http://localhost:8080` and the Filament admin at `http://localhost:80
 
 ### Prerequisites
 
-- PHP 8.2+
+- PHP 8.3+ (required — `composer.lock` pins packages that need 8.3)
 - Composer
 - MySQL (e.g. via Laragon)
 - Node.js (optional, only if you plan to customize frontend assets)
