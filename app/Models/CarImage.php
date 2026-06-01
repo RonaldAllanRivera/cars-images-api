@@ -27,6 +27,7 @@ class CarImage extends Model
         'height',
         'license',
         'attribution',
+        'make_confirmed',
         'download_status',
         'download_path',
         'metadata',
@@ -39,6 +40,7 @@ class CarImage extends Model
             'transparent_background' => 'boolean',
             'width' => 'integer',
             'height' => 'integer',
+            'make_confirmed' => 'boolean',
             'metadata' => 'array',
         ];
     }

@@ -12,7 +12,8 @@ class CarImageSearchService
 {
     public function __construct(
         protected WikimediaClient $wikimedia,
-        protected DatabaseManager $db
+        protected DatabaseManager $db,
+        protected MakeRelevanceChecker $makeChecker = new MakeRelevanceChecker(),
     ) {
     }
 
@@ -124,6 +125,8 @@ class CarImageSearchService
         );
 
         return $images->map(function (array $image) use ($search, $year) {
+            $categories = $image['metadata']['imageinfo'][0]['extmetadata']['Categories']['value'] ?? null;
+
             return CarImage::updateOrCreate(
                 [
                     'provider' => $image['provider'],
@@ -144,6 +147,12 @@ class CarImageSearchService
                     'height' => $image['height'],
                     'license' => $image['license'],
                     'attribution' => $image['attribution'],
+                    'make_confirmed' => $this->makeChecker->isConfirmed(
+                        $search->make,
+                        $image['title'],
+                        $image['description'],
+                        $categories,
+                    ),
                     'download_status' => 'not_downloaded',
                     'download_path' => null,
                     'metadata' => $image['metadata'],

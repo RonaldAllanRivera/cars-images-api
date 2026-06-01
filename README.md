@@ -1,12 +1,13 @@
 ## Cars Images API (Wikimedia + Filament 4)
 
-Cars Images API is a Laravel 12 + Filament 4 admin panel that integrates with **Wikimedia Commons** to search, cache, and manage high‑resolution **car images**.
+Cars Images API is a Laravel 12 + Filament 4 admin panel that integrates with **Wikimedia Commons** to search, cache, and manage high‑resolution **car images**. It supports both ad‑hoc single searches and **bulk CSV‑driven** harvesting of thousands of vehicles, with manual review and web‑optimized downloads.
 
 It is designed as an internal tool and portfolio project to demonstrate:
 
 - Clean Laravel backend architecture.
 - Modern Filament 4 admin UI.
-- Careful use of external APIs with caching and reuse of results.
+- Careful use of external APIs with caching, reuse, and rate‑limit etiquette.
+- Pragmatic handling of real‑world data quality (relevance flagging, server‑side image optimization).
 
 ---
 
@@ -24,6 +25,17 @@ It is designed as an internal tool and portfolio project to demonstrate:
   - Identical completed searches are reused instead of hitting Wikimedia again.
 - **Result quality filter**
   - Lightweight filter that tries to drop obvious non‑car images (e.g. flowers / plants, or clearly non-car academic/journal pages) using image title, description, categories, and metadata.
+  - Non‑image files (PDFs, documents) returned by Wikimedia's File namespace are excluded by MIME type.
+  - **Year‑relaxation fallback**: when a year‑specific search returns nothing, it retries once without the year so sparse models still return results.
+- **Make‑relevance flagging**
+  - Each stored image records whether the searched **make actually appears** in its title, description, or categories. The Results page shows a **"Make match"** badge (Confirmed / Not confirmed) and a filter to show only confirmed matches.
+  - This surfaces a real Wikimedia data quirk: badge‑engineered or region‑specific models are filed under another make (e.g. the Acura CL is catalogued as a "Honda Accord"), so an "Acura" search may return the same car under "Honda". Nothing is hidden — you review and decide, with the borderline ones flagged for your eye.
+- **CSV bulk search & download** (three‑page workflow under **Cars**)
+  - **Upload CSV** of `Make, Model, Year, Transmission` rows; deduplicated by `(Year, Make, Model)`, capped per upload, stored as pending search queries.
+  - **Search Queries**: review imported queries and run them manually — one at a time or in capped bulk batches — with a live loader. Wikimedia rate‑limit responses (429/403/503) auto‑pause the run and are logged.
+  - **Results**: browse images, then **Download selected as ZIP** (web‑optimized) or **Export selected as CSV** (manifest), with `YEAR MAKE MODEL.jpg` filenames and duplicate suffixes.
+- **Web‑optimized downloads**
+  - Bulk ZIP images are resized server‑side (GD) to a configurable max width (default 1600px) and re‑encoded as JPEG — typically ~85% smaller than the originals. (Wikimedia blocks on‑demand thumbnail generation from server IPs, so resizing is done locally.)
 - **Filament admin experience**
   - Dedicated navigation group for Cars.
   - Car Searches and Car Images tables with sortable, searchable columns and default **100 rows per page** for efficient review.

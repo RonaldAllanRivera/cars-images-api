@@ -64,6 +64,41 @@ class ResultsPageTest extends TestCase
             ->assertFileDownloaded();
     }
 
+    public function test_make_match_filter_shows_only_confirmed_images(): void
+    {
+        $user = User::factory()->create();
+        $csvImport = CsvImport::create([
+            'original_filename' => 's.csv', 'total_rows' => 1,
+            'unique_combos' => 1, 'duplicates_skipped' => 0, 'imported_by' => $user->id,
+        ]);
+        $search = CarSearch::create([
+            'make' => 'Acura', 'model' => 'CL', 'from_year' => 1997, 'to_year' => 1997,
+            'transparent_background' => false, 'images_per_year' => 5,
+            'status' => 'completed', 'requested_by' => $user->id, 'csv_import_id' => $csvImport->id,
+        ]);
+        $confirmed = CarImage::create([
+            'car_search_id' => $search->id, 'provider' => 'wikimedia', 'provider_image_id' => 'OK',
+            'make' => 'Acura', 'model' => 'CL', 'year' => 1997, 'title' => 'Acura CL',
+            'source_url' => 'https://example.com/ok.jpg', 'thumbnail_url' => 'https://example.com/ok.jpg',
+            'width' => 800, 'height' => 600, 'download_status' => 'not_downloaded',
+            'make_confirmed' => true,
+        ]);
+        $offMake = CarImage::create([
+            'car_search_id' => $search->id, 'provider' => 'wikimedia', 'provider_image_id' => 'OFF',
+            'make' => 'Acura', 'model' => 'CL', 'year' => 1997, 'title' => 'Honda Accord CL3 europe',
+            'source_url' => 'https://example.com/off.jpg', 'thumbnail_url' => 'https://example.com/off.jpg',
+            'width' => 800, 'height' => 600, 'download_status' => 'not_downloaded',
+            'make_confirmed' => false,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(Results::class)
+            ->assertCanSeeTableRecords([$confirmed, $offMake])
+            ->filterTable('make_confirmed', '1')
+            ->assertCanSeeTableRecords([$confirmed])
+            ->assertCanNotSeeTableRecords([$offMake]);
+    }
+
     public function test_bulk_zip_action_notifies_when_no_images_downloadable(): void
     {
         Http::fake(['*' => Http::response('Forbidden', 403)]);

@@ -68,11 +68,41 @@ class Results extends Page implements HasTable
                 Tables\Columns\TextColumn::make('year')->sortable(),
                 Tables\Columns\TextColumn::make('make')->sortable(),
                 Tables\Columns\TextColumn::make('model'),
+                Tables\Columns\TextColumn::make('make_confirmed')
+                    ->label('Make match')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => match (true) {
+                        $state === true || $state === 1 => 'Confirmed',
+                        $state === false || $state === 0 => 'Not confirmed',
+                        default => 'Unknown',
+                    })
+                    ->color(fn ($state) => match (true) {
+                        $state === true || $state === 1 => 'success',
+                        $state === false || $state === 0 => 'warning',
+                        default => 'gray',
+                    })
+                    ->tooltip('Whether the searched make actually appears in the image title, description, or categories.'),
             ])
             ->filters([
                 SelectFilter::make('csv_import_id')
                     ->label('CSV Import')
                     ->relationship('search.csvImport', 'original_filename'),
+                SelectFilter::make('make_confirmed')
+                    ->label('Make match')
+                    ->options([
+                        '1' => 'Confirmed',
+                        '0' => 'Not confirmed',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        if ($data['value'] === '1') {
+                            return $query->where('make_confirmed', true);
+                        }
+                        if ($data['value'] === '0') {
+                            return $query->where('make_confirmed', false);
+                        }
+
+                        return $query;
+                    }),
             ])
             ->recordActions([
                 Actions\Action::make('preview')
