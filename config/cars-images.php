@@ -52,4 +52,13 @@ return [
     'download_max_width' => env('CARS_DOWNLOAD_MAX_WIDTH', 1600),
 
     'download_jpeg_quality' => env('CARS_DOWNLOAD_JPEG_QUALITY', 82),
+
+    /*
+    | Max images per bulk ZIP download. The ZIP is built synchronously in a
+    | single web request (fetch + resize each image), so on shared hosting a
+    | large selection would exceed the web request timeout. Selections above
+    | this are rejected with a "select fewer" notice rather than timing out.
+    | Raise it only if the host allows long-running web requests.
+    */
+    'bulk_download_max_images' => env('CARS_BULK_DOWNLOAD_MAX_IMAGES', 100),
 ];

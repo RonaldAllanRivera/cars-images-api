@@ -99,6 +99,82 @@ class ResultsPageTest extends TestCase
             ->assertCanNotSeeTableRecords([$offMake]);
     }
 
+    /**
+     * Create a confirmed + an off-make image under a CSV-imported search,
+     * so both appear in the Results page query (scoped to csv_import_id).
+     *
+     * @return array{0: \App\Models\User, 1: CarImage, 2: CarImage}
+     */
+    private function makeConfirmedAndOffMake(): array
+    {
+        $user = User::factory()->create();
+        $csvImport = CsvImport::create([
+            'original_filename' => 's.csv', 'total_rows' => 1,
+            'unique_combos' => 1, 'duplicates_skipped' => 0, 'imported_by' => $user->id,
+        ]);
+        $search = CarSearch::create([
+            'make' => 'Acura', 'model' => 'CL', 'from_year' => 1997, 'to_year' => 1997,
+            'transparent_background' => false, 'images_per_year' => 5,
+            'status' => 'completed', 'requested_by' => $user->id, 'csv_import_id' => $csvImport->id,
+        ]);
+        $confirmed = CarImage::create([
+            'car_search_id' => $search->id, 'provider' => 'wikimedia', 'provider_image_id' => 'OK',
+            'make' => 'Acura', 'model' => 'CL', 'year' => 1997, 'title' => 'Acura CL',
+            'source_url' => 'https://upload.wikimedia.org/ok.jpg', 'thumbnail_url' => 'https://upload.wikimedia.org/ok.jpg',
+            'width' => 800, 'height' => 600, 'download_status' => 'not_downloaded', 'make_confirmed' => true,
+        ]);
+        $offMake = CarImage::create([
+            'car_search_id' => $search->id, 'provider' => 'wikimedia', 'provider_image_id' => 'OFF',
+            'make' => 'Acura', 'model' => 'CL', 'year' => 1997, 'title' => 'Honda Accord',
+            'source_url' => 'https://upload.wikimedia.org/off.jpg', 'thumbnail_url' => 'https://upload.wikimedia.org/off.jpg',
+            'width' => 800, 'height' => 600, 'download_status' => 'not_downloaded', 'make_confirmed' => false,
+        ]);
+
+        return [$user, $confirmed, $offMake];
+    }
+
+    public function test_download_confirmed_zip_includes_only_confirmed_images(): void
+    {
+        Http::fake(['*' => Http::response('IMGDATA', 200)]);
+
+        [$user, $confirmed, $offMake] = $this->makeConfirmedAndOffMake();
+
+        Livewire::actingAs($user)
+            ->test(Results::class)
+            ->callTableBulkAction('downloadConfirmedZip', [$confirmed, $offMake])
+            ->assertFileDownloaded();
+
+        // Only the confirmed image is marked downloaded; the off-make one is left alone.
+        $this->assertSame('downloaded', $confirmed->fresh()->download_status);
+        $this->assertSame('not_downloaded', $offMake->fresh()->download_status);
+    }
+
+    public function test_download_confirmed_zip_notifies_when_selection_has_no_confirmed(): void
+    {
+        [$user, , $offMake] = $this->makeConfirmedAndOffMake();
+
+        Livewire::actingAs($user)
+            ->test(Results::class)
+            ->callTableBulkAction('downloadConfirmedZip', [$offMake])
+            ->assertNotified();
+    }
+
+    public function test_bulk_zip_respects_the_max_images_cap(): void
+    {
+        config(['cars-images.bulk_download_max_images' => 1]);
+
+        [$user, $confirmed, $offMake] = $this->makeConfirmedAndOffMake();
+
+        Livewire::actingAs($user)
+            ->test(Results::class)
+            ->callTableBulkAction('downloadZip', [$confirmed, $offMake])
+            ->assertNotified();
+
+        // Over the cap → nothing downloaded.
+        $this->assertSame('not_downloaded', $confirmed->fresh()->download_status);
+        $this->assertSame('not_downloaded', $offMake->fresh()->download_status);
+    }
+
     public function test_bulk_zip_action_notifies_when_no_images_downloadable(): void
     {
         Http::fake(['*' => Http::response('Forbidden', 403)]);

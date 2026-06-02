@@ -121,32 +121,25 @@ class Results extends Page implements HasTable
                 Actions\BulkAction::make('downloadZip')
                     ->label('Download Selected as ZIP')
                     ->icon('heroicon-o-archive-box-arrow-down')
+                    ->action(fn (Collection $records, BatchZipBuilder $builder) => $this->zipDownload($records, $builder)),
+                Actions\BulkAction::make('downloadConfirmedZip')
+                    ->label('Download Confirmed as ZIP')
+                    ->icon('heroicon-o-check-badge')
+                    ->color('success')
                     ->action(function (Collection $records, BatchZipBuilder $builder) {
-                        $images = $records->loadMissing('search');
+                        $confirmed = $records->filter(fn (CarImage $image) => (bool) $image->make_confirmed)->values();
 
-                        $tmpPath = tempnam(sys_get_temp_dir(), 'cars-batch-');
-                        $added = $builder->buildToFile($images, $tmpPath);
-
-                        if ($added === 0) {
-                            @unlink($tmpPath);
-
+                        if ($confirmed->isEmpty()) {
                             Notification::make()
-                                ->title('No images could be downloaded')
-                                ->body('None of the selected images could be fetched from Wikimedia. Please try again in a moment.')
-                                ->danger()
+                                ->title('No confirmed images in selection')
+                                ->body('None of the selected images have a confirmed make match. Use the "Make match" badge/filter to find confirmed ones.')
+                                ->warning()
                                 ->send();
 
                             return null;
                         }
 
-                        CarImage::whereIn('id', $images->pluck('id'))
-                            ->update(['download_status' => 'downloaded']);
-
-                        $filename = 'cars-batch-' . now()->format('Ymd-His') . '.zip';
-
-                        return response()->download($tmpPath, $filename, [
-                            'Content-Type' => 'application/zip',
-                        ])->deleteFileAfterSend(true);
+                        return $this->zipDownload($confirmed, $builder);
                     }),
                 Actions\BulkAction::make('exportCsv')
                     ->label('Export Selected as CSV')
@@ -168,6 +161,54 @@ class Results extends Page implements HasTable
                 Actions\DeleteBulkAction::make(),
             ])
             ->paginated([24, 48, 96]);
+    }
+
+    /**
+     * Build and stream a web-optimized ZIP of the given images.
+     *
+     * Shared by the "Download Selected" and "Download Confirmed" bulk
+     * actions. Enforces the bulk_download_max_images cap (the ZIP is built
+     * synchronously in one web request, so large sets would time out on
+     * shared hosting), and surfaces clear notifications instead of failing.
+     */
+    protected function zipDownload(Collection $images, BatchZipBuilder $builder): mixed
+    {
+        $images = $images->loadMissing('search');
+
+        $max = (int) config('cars-images.bulk_download_max_images', 100);
+        if ($images->count() > $max) {
+            Notification::make()
+                ->title('Too many images selected')
+                ->body("Bulk ZIP is limited to {$max} images per download on this server. Select fewer and try again.")
+                ->warning()
+                ->send();
+
+            return null;
+        }
+
+        $tmpPath = tempnam(sys_get_temp_dir(), 'cars-batch-');
+        $added = $builder->buildToFile($images, $tmpPath);
+
+        if ($added === 0) {
+            @unlink($tmpPath);
+
+            Notification::make()
+                ->title('No images could be downloaded')
+                ->body('None of the selected images could be fetched from Wikimedia. Please try again in a moment.')
+                ->danger()
+                ->send();
+
+            return null;
+        }
+
+        CarImage::whereIn('id', $images->pluck('id'))
+            ->update(['download_status' => 'downloaded']);
+
+        $filename = 'cars-batch-' . now()->format('Ymd-His') . '.zip';
+
+        return response()->download($tmpPath, $filename, [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
     }
 
     public static function getRouteName(?Panel $panel = null): string

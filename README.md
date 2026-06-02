@@ -33,7 +33,7 @@ It is designed as an internal tool and portfolio project to demonstrate:
 - **CSV bulk search & download** (three‑page workflow under **Cars**)
   - **Upload CSV** of `Make, Model, Year, Transmission` rows; deduplicated by `(Year, Make, Model)`, capped per upload, stored as pending search queries.
   - **Search Queries**: review imported queries and run them manually — one at a time or in capped bulk batches — with a live loader. Wikimedia rate‑limit responses (429/403/503) auto‑pause the run and are logged.
-  - **Results**: browse images, then **Download selected as ZIP** (web‑optimized) or **Export selected as CSV** (manifest), with `YEAR MAKE MODEL.jpg` filenames and duplicate suffixes.
+  - **Results**: browse images, then **Download selected as ZIP**, **Download Confirmed as ZIP** (only images whose make matched — see make‑relevance flagging), or **Export selected as CSV** (manifest), with `YEAR MAKE MODEL.jpg` filenames and duplicate suffixes. Bulk ZIPs are capped (`CARS_BULK_DOWNLOAD_MAX_IMAGES`, default 100) since they are built synchronously — large sets are downloaded in batches.
 - **Web‑optimized downloads**
   - Bulk ZIP images are resized server‑side (GD) to a configurable max width (default 1600px) and re‑encoded as JPEG — typically ~85% smaller than the originals. (Wikimedia blocks on‑demand thumbnail generation from server IPs, so resizing is done locally.)
 - **Filament admin experience**
