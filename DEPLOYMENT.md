@@ -6,7 +6,7 @@ This document describes how to deploy the `cars-images-api` Laravel app to **Sit
 - **SiteGround path:** `www/cars-search.artworkwebsite.com/public_html`
 - **GitHub repo:** `https://github.com/RonaldAllanRivera/cars-images-api.git`
 
-**Deployment model:** the code lives on GitHub. You `git clone` it onto SiteGround over SSH, then `git pull` for every later update. There is no SiteGround Git integration or CI/CD — every deploy is a manual SSH session.
+**Deployment model:** the code lives on GitHub. You `git clone` it onto SiteGround over SSH once (§4), after which deploys are automated by GitHub Actions (§6). The manual SSH sequence is still documented in §6.2 as the fallback and as the reference for what the workflow does.
 
 This guide is written for an **Ubuntu** workstation. SiteGround's own SSH tutorial covers PuTTY on Windows; Section 2 below is the Ubuntu (OpenSSH) equivalent.
 
@@ -432,7 +432,58 @@ If you later change `QUEUE_CONNECTION` from `sync` to `database`, also schedule 
 
 ## 6. Updating the application (subsequent deploys)
 
-When you push new code to GitHub and want to update the site:
+### 6.1. Automated deploy with GitHub Actions (recommended)
+
+`.github/workflows/ci-cd.yml` runs the tests on every push and pull request,
+and — only when they pass, only on `main`, and only once you switch it on —
+SSHes into SiteGround and performs the sequence in §6.2 for you.
+
+**One-time setup.** In the GitHub repository, add these under
+*Settings → Secrets and variables → Actions*:
+
+| Secret | Example | Notes |
+| --- | --- | --- |
+| `SSH_HOST` | `giowg1234.siteground.biz` | SiteGround SSH hostname |
+| `SSH_PORT` | `18765` | SiteGround's non-standard SSH port |
+| `SSH_USER` | `u1234-abcdefg` | SiteGround SSH username |
+| `SSH_PRIVATE_KEY` | *(full PEM text)* | The **private** half of the key from §2.1, including the BEGIN/END lines |
+| `SSH_KNOWN_HOSTS` | *(one line)* | Output of `ssh-keyscan -p 18765 YOUR_HOST` |
+| `DEPLOY_PATH` | `~/www/cars-search.artworkwebsite.com/cars-images-api` | Absolute path to the Laravel root on the server |
+| `APP_URL` | `https://cars-search.artworkwebsite.com` | Optional; enables the post-deploy smoke check |
+
+And these as **Variables** (not secrets):
+
+| Variable | Value | Notes |
+| --- | --- | --- |
+| `DEPLOY_ENABLED` | `true` | **The master switch.** Until it is `true`, the deploy job is skipped, so adding this workflow cannot fire a deploy before the secrets exist. |
+| `PHP_BIN` | `/usr/local/php83/bin/php` | Optional. Set it if SiteGround's default CLI `php` is not 8.3+ (see §4.4) |
+| `COMPOSER_BIN` | `composer` | Optional. Set it if Composer is not on `PATH`, e.g. `~/composer.phar` |
+
+**Why `SSH_KNOWN_HOSTS` rather than disabling host checking:** the workflow
+hands a private key to whatever answers on that hostname. Pinning the host key
+means a hijacked DNS record cannot silently collect your deploy key.
+
+**Safety properties worth knowing:**
+
+- The deploy job has `needs: test`, so a red suite blocks the deploy.
+- `concurrency` prevents two deploys overlapping mid-`composer install`.
+- The site is put in maintenance mode, and a `trap ... EXIT` brings it back up
+  **even if a migration fails** — a failed deploy must not leave the panel dark.
+- The remote step uses `git reset --hard origin/main`, not `git pull`. This repo
+  used to track Filament's compiled assets, and a leftover local modification
+  would turn a deploy into a merge conflict. `.env` and `storage/` are untracked
+  and are never touched.
+- A post-deploy request to `/admin/login` must return HTTP 200, so a deploy that
+  leaves the site 500ing fails the run instead of reporting success.
+- Attach a `production` GitHub Environment (*Settings → Environments*) if you
+  want a manual approval gate before each deploy.
+
+To deploy, push to `main` — or run the workflow by hand from the **Actions** tab
+(`workflow_dispatch`).
+
+### 6.2. Manual deploy over SSH (fallback)
+
+This is what the workflow automates. Use it if Actions is unavailable:
 
 1. **On Ubuntu** — push your latest commits:
 

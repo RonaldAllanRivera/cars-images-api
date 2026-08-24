@@ -1,0 +1,171 @@
+name: CI / Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Never let two deploys touch the server at once. A queued run waits for the
+# one in flight rather than interleaving composer installs and migrations.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Test (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # 8.3 is the real floor: Filament pulls openspout, which requires
+        # ~8.3.0+, and Laravel 13 requires ^8.3.
+        php: ['8.3']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          # gd  -> ImageResizer, zip -> BatchZipBuilder, intl -> filament/support,
+          # pdo_sqlite -> the test database defined in phpunit.xml.
+          extensions: gd, zip, intl, pdo_sqlite, mbstring, exif, bcmath
+          coverage: none
+
+      - name: Validate composer manifest
+        run: composer validate --strict
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/composer/files
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ matrix.php }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Confirm every declared platform requirement is met
+        run: composer check-platform-reqs
+
+      - name: Prepare environment
+        # The suite mints its own APP_KEY (see tests/bootstrap.php), so no
+        # secret is needed. The .env still gets created because Laravel's
+        # Dotenv emits a PHP warning when booting without one.
+        run: cp .env.example .env
+
+      - name: Check code style
+        run: vendor/bin/pint --test
+
+      - name: Run tests
+        run: php artisan test
+
+      - name: Audit dependencies for known vulnerabilities
+        run: composer audit
+
+  deploy:
+    name: Deploy to SiteGround
+    runs-on: ubuntu-latest
+    needs: test
+
+    # Deploys only from main, never from a pull request, and only once the
+    # repository variable DEPLOY_ENABLED is set to 'true'. That switch means
+    # merging this workflow cannot fire a deploy before the secrets exist.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event_name != 'pull_request' &&
+      vars.DEPLOY_ENABLED == 'true'
+
+    # Attach a GitHub Environment so you can require a manual approval or
+    # restrict which branches may deploy: Settings -> Environments -> production.
+    environment: production
+
+    steps:
+      - name: Open an SSH session to SiteGround
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pin the host key rather than disabling host verification, so a
+          # hijacked DNS record cannot silently receive the deploy key.
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          # SiteGround's default `php` on the CLI is often an older build than
+          # the one serving the site. Set these repository variables if you
+          # need a specific binary, e.g. PHP_BIN=/usr/local/php83/bin/php
+          PHP_BIN: ${{ vars.PHP_BIN || 'php' }}
+          COMPOSER_BIN: ${{ vars.COMPOSER_BIN || 'composer' }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "PHP_BIN='$PHP_BIN' COMPOSER_BIN='$COMPOSER_BIN' DEPLOY_PATH='$DEPLOY_PATH' bash -se" <<'REMOTE'
+          set -euo pipefail
+
+          cd "$DEPLOY_PATH"
+          echo "==> Deploying $(pwd) as $(whoami)"
+          "$PHP_BIN" -v | head -1
+
+          # Bring the site down, but always bring it back up (see the trap).
+          # Without this a failed migration would leave the panel offline.
+          trap '"$PHP_BIN" artisan up || true' EXIT
+          "$PHP_BIN" artisan down --retry=15 || true
+
+          echo "==> Fetching code"
+          git fetch --all --prune
+          # reset --hard rather than pull: the repo previously tracked Filament's
+          # compiled assets, and any leftover local modification would turn a
+          # deploy into a merge conflict. Nothing on the server is authored by
+          # hand -- .env and storage/ are untracked and are not touched by this.
+          git reset --hard origin/main
+
+          echo "==> Installing dependencies"
+          "$COMPOSER_BIN" install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+          echo "==> Running migrations"
+          "$PHP_BIN" artisan migrate --force
+
+          echo "==> Publishing Filament assets"
+          "$PHP_BIN" artisan filament:upgrade
+
+          echo "==> Rebuilding caches"
+          "$PHP_BIN" artisan config:clear
+          "$PHP_BIN" artisan config:cache
+          "$PHP_BIN" artisan route:cache
+          "$PHP_BIN" artisan view:cache
+
+          echo "==> Ensuring the storage symlink exists"
+          "$PHP_BIN" artisan storage:link || true
+
+          echo "==> Deploy complete"
+          REMOTE
+
+      - name: Smoke check the deployed site
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_URL:-}" ]; then
+            echo "APP_URL secret not set - skipping smoke check."
+            exit 0
+          fi
+          # A deploy that leaves the panel 500ing should fail the run, not
+          # report success. /admin/login is the cheapest page that proves
+          # the framework booted and Filament's assets resolved.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "${APP_URL%/}/admin/login")
+          echo "GET ${APP_URL%/}/admin/login -> $code"
+          [ "$code" = "200" ]

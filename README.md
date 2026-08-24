@@ -302,6 +302,8 @@ Code style is enforced with Pint:
 
 ## Deployment
 
+Pushing to `main` runs the test suite and, once enabled, deploys to SiteGround automatically via [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) — gated on a green suite, with maintenance mode, host-key pinning, and a post-deploy smoke check.
+
 `DEPLOYMENT.md` covers deployment to SiteGround shared hosting in detail: directory layout, serving Laravel from `public/`, the `.htaccess` rewrite that keeps `/livewire/livewire.js` reachable, environment configuration, and troubleshooting. The Docker stack above deliberately mirrors that environment.
 
 ---
@@ -337,7 +339,6 @@ Background on the original design and decision history lives in `PLAN.md`, `CHAT
 
 - Move bulk search and bulk download onto a queue worker, retiring the synchronous caps (`app/Jobs/` holds the scaffolding).
 - Persist exports to the `cars` storage disk instead of streaming them straight to the browser.
-- Add a CI pipeline running Pint and PHPUnit against MySQL.
 - Replace the keyword-based non-car heuristic with AI-assisted classification for ambiguous results (see `PLAN.md`).
 
 ---

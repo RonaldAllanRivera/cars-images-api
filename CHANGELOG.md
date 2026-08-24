@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`.github/workflows/ci-cd.yml`** — tests on every push and pull request (Pint, PHPUnit, `composer validate --strict`, `check-platform-reqs`, `composer audit`), and an automated SiteGround deploy gated on a green suite. The deploy puts the site in maintenance mode with a `trap ... EXIT` that restores it even if a migration fails, pins the SSH host key rather than disabling host verification, serialises runs with `concurrency`, and finishes with an HTTP 200 smoke check on `/admin/login` so a deploy that breaks the panel fails the run. It stays dormant until the repository variable `DEPLOY_ENABLED` is set to `true`. Setup and required secrets are documented in `DEPLOYMENT.md` §6.1.
+
 ### Planned
 
 - Move bulk search and bulk download onto a real queue worker so long runs are not bound by the web request timeout (the `RunCarSearchJob`, `FetchWikimediaCarImagesForYearJob`, and `DownloadCarImagesJob` classes exist as scaffolding but are not dispatched yet).
 - Persist downloaded images to the `cars` storage disk instead of streaming them straight to the browser.
-- Add a CI pipeline (Pint, PHPUnit, `composer validate`, `composer check-platform-reqs`, `composer audit`).
 - Explore AI-assisted filtering for ambiguous results, replacing the current keyword heuristic (see `PLAN.md`).
 
 ## [0.8.2] - 2026-08-24
