@@ -227,8 +227,14 @@ Alternatively, if you cloned the repository **directly into `public_html`** (so 
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
-    # Let Laravel handle Livewire's JS endpoint explicitly
-    RewriteCond %{REQUEST_URI} ^/livewire/livewire\.js$ [NC]
+    # Let Laravel handle every Livewire endpoint explicitly.
+    #
+    # Livewire 4 serves its routes from an APP_KEY-derived prefix
+    # (e.g. /livewire-c3b9adb8/livewire.js, /livewire-c3b9adb8/update)
+    # rather than the fixed /livewire/ of Livewire 3. The prefix differs
+    # per environment because the APP_KEY does, so this rule MUST stay a
+    # pattern — never hardcode the prefix you see locally.
+    RewriteCond %{REQUEST_URI} ^/livewire(-[A-Za-z0-9]+)?/ [NC]
     RewriteRule ^ public/index.php [L]
 
     # Don't rewrite if already under /public
@@ -242,7 +248,9 @@ Alternatively, if you cloned the repository **directly into `public_html`** (so 
 This makes:
 
 - `https://cars-search.artworkwebsite.com/` serve `public/index.php` without exposing `/public` in the URL.
-- `/livewire/livewire.js` and other Livewire endpoints go through Laravel instead of being treated as missing static files, avoiding 404/403 errors that break the Filament login.
+- Livewire's JS asset and its `update` / `upload-file` endpoints go through Laravel instead of being treated as missing static files, avoiding the 404/403 errors that break the Filament login.
+
+> **Livewire 4 changed this path.** Under Livewire 3 the asset was always at `/livewire/livewire.js`. Livewire 4 derives the whole route prefix from `APP_KEY`, so locally it might be `/livewire-c3b9adb8/livewire.js` while production is something else entirely. Verify the real value after deploying with `php artisan route:list | grep livewire`, and confirm the URL the login page references actually returns HTTP 200. If you ever rotate `APP_KEY`, the prefix changes with it.
 
 > **Laravel `public/.htaccess`** – The Laravel project already includes an `.htaccess` file inside the `public/` directory with the standard rewrite rules that send all non-existing files/directories to `index.php`. On SiteGround you normally **leave this file as-is** – just make sure it exists after deployment.
 

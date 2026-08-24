@@ -11,7 +11,7 @@ class ModelSearchTermNormalizerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->normalizer = new ModelSearchTermNormalizer();
+        $this->normalizer = new ModelSearchTermNormalizer;
     }
 
     public function test_strips_displacement_prefix_and_collapses_slash_variants(): void

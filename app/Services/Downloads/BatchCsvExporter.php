@@ -9,8 +9,7 @@ class BatchCsvExporter
 {
     public function __construct(
         protected FilenameBuilder $filenames,
-    ) {
-    }
+    ) {}
 
     public const HEADER = ['Year', 'Make', 'Model', 'Transmission', 'Filename', 'SourceUrl', 'SearchId', 'ImageId'];
 
@@ -73,8 +72,8 @@ class BatchCsvExporter
      *
      * e.g. "1997 Toyota RAV4.jpg" then "1997 Toyota RAV4 2.png" (not "1997 Toyota RAV4.png").
      *
-     * @param  array<string,true>  $usedNames    full filenames already issued (mutated)
-     * @param  array<string,int>   $baseCounters  next counter per base string (mutated)
+     * @param  array<string,true>  $usedNames  full filenames already issued (mutated)
+     * @param  array<string,int>  $baseCounters  next counter per base string (mutated)
      */
     private function buildUniqueByBase(
         int $year,
@@ -93,7 +92,7 @@ class BatchCsvExporter
         if (! isset($baseCounters[$baseName])) {
             // First time we've seen this base — use no suffix.
             $baseCounters[$baseName] = 2;
-            $candidate = $baseName . $ext;
+            $candidate = $baseName.$ext;
         } else {
             // Already used — apply and advance the counter.
             $counter = $baseCounters[$baseName];

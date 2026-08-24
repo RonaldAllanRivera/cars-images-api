@@ -11,7 +11,7 @@ class FilenameBuilderTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->builder = new FilenameBuilder();
+        $this->builder = new FilenameBuilder;
     }
 
     public function test_builds_basic_filename(): void

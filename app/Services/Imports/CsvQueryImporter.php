@@ -29,7 +29,7 @@ class CsvQueryImporter
             $missing = array_diff(self::REQUIRED_COLUMNS, $headers);
             if (! empty($missing)) {
                 throw new CsvImportException(
-                    'Missing required columns: ' . implode(', ', $missing) . '. Required: Make, Model, Year.'
+                    'Missing required columns: '.implode(', ', $missing).'. Required: Make, Model, Year.'
                 );
             }
 
@@ -53,16 +53,18 @@ class CsvQueryImporter
 
                 if ($make === '' || $model === '' || $year === '' || ! ctype_digit($year)) {
                     $skippedInvalid++;
+
                     continue;
                 }
 
                 $yearInt = (int) $year;
                 if ($yearInt < $minYear || $yearInt > $maxYear) {
                     $skippedInvalid++;
+
                     continue;
                 }
 
-                $key = $yearInt . '|' . $make . '|' . $model;
+                $key = $yearInt.'|'.$make.'|'.$model;
                 if (! isset($uniqueCombos[$key])) {
                     $uniqueCombos[$key] = [
                         'year' => $yearInt,

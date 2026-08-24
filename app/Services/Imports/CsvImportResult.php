@@ -9,6 +9,5 @@ class CsvImportResult
     public function __construct(
         public readonly CsvImport $csvImport,
         public readonly int $skippedInvalidRows,
-    ) {
-    }
+    ) {}
 }

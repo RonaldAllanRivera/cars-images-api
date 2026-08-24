@@ -17,7 +17,7 @@ return new class extends Migration
         });
 
         // Backfill existing rows from the metadata already stored on each image.
-        $checker = new MakeRelevanceChecker();
+        $checker = new MakeRelevanceChecker;
 
         DB::table('car_images')->orderBy('id')->chunkById(200, function ($rows) use ($checker) {
             foreach ($rows as $row) {

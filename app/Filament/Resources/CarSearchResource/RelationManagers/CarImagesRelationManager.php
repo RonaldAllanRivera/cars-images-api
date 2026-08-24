@@ -3,8 +3,9 @@
 namespace App\Filament\Resources\CarSearchResource\RelationManagers;
 
 use App\Models\CarImage;
-use Filament\Resources\RelationManagers\RelationManager;
+use App\Services\Images\CarImageZipService;
 use Filament\Actions;
+use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
 
@@ -60,7 +61,7 @@ class CarImagesRelationManager extends RelationManager
             ])
             ->filters([])
             ->headerActions([])
-            ->actions([
+            ->recordActions([
                 Actions\Action::make('preview')
                     ->label('Preview')
                     ->icon('heroicon-o-magnifying-glass-plus')
@@ -82,14 +83,14 @@ class CarImagesRelationManager extends RelationManager
                     ]),
                 Actions\DeleteAction::make(),
             ])
-            ->bulkActions([
+            ->toolbarActions([
                 Actions\BulkAction::make('downloadSelected')
                     ->label('Download selected')
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('primary')
                     ->tooltip('The more images are selected, the slower the download.')
                     ->action(function ($records) {
-                        $service = app(\App\Services\Images\CarImageZipService::class);
+                        $service = app(CarImageZipService::class);
 
                         return $service->downloadZip($records);
                     }),

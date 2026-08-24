@@ -4,18 +4,19 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\CarSearchResource\Pages;
 use App\Filament\Resources\CarSearchResource\RelationManagers\CarImagesRelationManager;
-use App\Models\CarSearch;
 use App\Models\CarMake;
+use App\Models\CarSearch;
 use BackedEnum;
-use UnitEnum;
 use Filament\Actions;
 use Filament\Forms;
+use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
-use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use UnitEnum;
 
 class CarSearchResource extends Resource
 {
@@ -27,7 +28,7 @@ class CarSearchResource extends Resource
 
     protected static ?string $navigationLabel = 'Car Image Searches';
 
-    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->whereNull('csv_import_id');
     }
@@ -193,10 +194,10 @@ class CarSearchResource extends Resource
                         'failed' => 'Failed',
                     ]),
             ])
-            ->actions([
+            ->recordActions([
                 Actions\ViewAction::make(),
             ])
-            ->bulkActions([])
+            ->toolbarActions([])
             ->paginated([10, 25, 50, 100])
             ->defaultPaginationPageOption(100);
     }

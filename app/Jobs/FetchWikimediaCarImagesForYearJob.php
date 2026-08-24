@@ -19,8 +19,7 @@ class FetchWikimediaCarImagesForYearJob implements ShouldQueue
         public int $carSearchId,
         public int $year,
         public int $limit
-    ) {
-    }
+    ) {}
 
     public function handle(CarImageSearchService $service): void
     {

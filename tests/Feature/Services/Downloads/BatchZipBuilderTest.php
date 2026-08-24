@@ -64,7 +64,7 @@ class BatchZipBuilderTest extends TestCase
 
         $this->assertSame(2, $added);
 
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         $opened = $zip->open($tmpFile);
         $this->assertTrue($opened === true, 'ZIP should open successfully');
 
@@ -209,7 +209,7 @@ class BatchZipBuilderTest extends TestCase
         $tmpFile = tempnam(sys_get_temp_dir(), 'zip');
         app(BatchZipBuilder::class)->buildToFile(collect([$img]), $tmpFile);
 
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         $zip->open($tmpFile);
         $entry = $zip->getFromName('1999 Acura NSX.jpg');
         $zip->close();

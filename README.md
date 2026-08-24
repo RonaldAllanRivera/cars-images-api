@@ -1,12 +1,12 @@
 # Cars Images API
 
-A Laravel 12 + Filament 4 application that searches, filters, reviews, and bulk-exports car photography from **Wikimedia Commons** — one vehicle at a time, or thousands of rows from a CSV.
+A Laravel 13 + Filament 5 application that searches, filters, reviews, and bulk-exports car photography from **Wikimedia Commons** — one vehicle at a time, or thousands of rows from a CSV.
 
 ![PHP](https://img.shields.io/badge/PHP-8.3%2B-777BB4?logo=php&logoColor=white)
-![Laravel](https://img.shields.io/badge/Laravel-12.x-FF2D20?logo=laravel&logoColor=white)
-![Filament](https://img.shields.io/badge/Filament-4.x-FDAE4B)
+![Laravel](https://img.shields.io/badge/Laravel-13.x-FF2D20?logo=laravel&logoColor=white)
+![Filament](https://img.shields.io/badge/Filament-5.x-FDAE4B)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-75-informational)
+![Tests](https://img.shields.io/badge/tests-114-informational)
 
 ---
 
@@ -48,7 +48,7 @@ Every stage is inspectable in the admin panel, and nothing is thrown away withou
 
 ```mermaid
 flowchart TB
-    subgraph Panel["Filament 4 admin panel"]
+    subgraph Panel["Filament 5 admin panel"]
         direction LR
         P1["Upload CSV"]
         P2["Search Queries"]
@@ -108,7 +108,8 @@ The two entry points share one engine. An **ad-hoc search** (`car_searches` with
 
 ### Review
 
-- **Make-match flagging.** Each image records whether the searched make actually appears in its title, description, or categories, shown as a **Confirmed / Not confirmed** badge with a filter. Nothing is hidden — borderline results are surfaced for a human call.
+- **Off-make rejection, then flagging.** Wikimedia's full-text search matches loosely — querying an `Acura CL` returns `Honda Accord CL3` photographs, because the Accord's chassis code contains the model token. Images that plainly name a *different* manufacturer are therefore rejected outright and never stored. What survives is recorded as **Confirmed / Not confirmed** against the searched make and shown as a badge with a filter, so genuinely ambiguous results still reach a human rather than being silently trusted.
+- **Badge engineering is preserved.** Some Acuras are legitimately catalogued by Wikimedia under Honda. A page naming *both* makes is kept, because it really is the searched car.
 - Sortable, searchable tables with thumbnails, live-polling status badges, preview modals, and per-row or bulk delete.
 
 ### Export
@@ -151,15 +152,15 @@ The parts of this project worth reading are the ones that exist because the obvi
 | Layer | Choice |
 | --- | --- |
 | Runtime | PHP 8.3+ (`ext-gd`, `ext-zip`, `ext-intl`, `ext-pdo_mysql`) |
-| Framework | Laravel 12.x |
-| Admin UI | Filament 4.x (Livewire 3) |
+| Framework | Laravel 13.x |
+| Admin UI | Filament 5.x (Livewire 4) |
 | Database | MySQL 8.0 |
 | External API | MediaWiki / Wikimedia Commons |
 | Image processing | GD |
 | Local environment | Docker (Apache + mod_php + MySQL) |
-| Tests | PHPUnit 11 (requires `ext-pdo_sqlite`) |
+| Tests | PHPUnit 12 (requires `ext-pdo_sqlite`) |
 
-> **On Laravel 13:** the project tracks the latest Laravel 12.x and Filament 4.x releases. Laravel 13 is intentionally not adopted yet — Filament 4 and Livewire 3 do not support it. The upgrade follows once that ecosystem ships compatibility.
+> **Currently on the latest release of every major dependency** — Laravel 13.26, Filament 5.7, Livewire 4.4, PHPUnit 12. The upgrade was executed in verified stages; the plan, compatibility matrix, per-stage gates, and the issues it surfaced are recorded in [`docs/upgrades/2026-08-24-laravel-13-filament-5-upgrade.md`](docs/upgrades/2026-08-24-laravel-13-filament-5-upgrade.md).
 
 ---
 
@@ -282,7 +283,9 @@ php artisan test --testsuite=Unit       # fast, no database
 php artisan test --filter=BatchZipBuilder
 ```
 
-75 tests across 18 files: 34 unit tests over the pure helpers (filename building, image resizing, make relevance, model normalization) and 41 feature tests over the CSV importer, ZIP/CSV export, Wikimedia block handling and recall fallback, resource scoping, and the Results page bulk actions.
+114 tests across 23 files: 41 unit tests over the pure helpers (filename building, image resizing, make relevance and off-make rejection, model normalization) and 73 feature tests over the CSV importer, ZIP/CSV export, Wikimedia block handling and recall fallback, resource scoping, off-make filtering, the Results page bulk actions, a smoke test that mounts **every** page in the panel, the registered record/bulk actions on every table, the CSV upload driven through the Filament form itself, and the ad-hoc search form's `All ...` sentinel round-trip.
+
+The last three exist as upgrade insurance, and they earned it: they carried this codebase through Laravel 12→13 and Filament 4→5 (Livewire 3→4) with no behavioural regressions. A major release typically breaks an application by renaming a builder method, which leaves the resource compiling but the page throwing on mount — `PanelSmokeTest` turns that into a failing test rather than a support ticket, and `TableActionsTest` catches the subtler case where a page still renders but has quietly lost its buttons.
 
 > Feature tests run against an in-memory SQLite database (see `phpunit.xml`), so **`ext-pdo_sqlite` must be installed** — without it every database-backed test errors with `could not find driver` while the unit tests still pass.
 

@@ -11,7 +11,7 @@ class MakeRelevanceCheckerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->checker = new MakeRelevanceChecker();
+        $this->checker = new MakeRelevanceChecker;
     }
 
     public function test_confirms_when_make_appears_in_title(): void
@@ -66,5 +66,114 @@ class MakeRelevanceCheckerTest extends TestCase
     public function test_does_not_confirm_with_no_haystack(): void
     {
         $this->assertFalse($this->checker->isConfirmed('Toyota', null, null, null));
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Off-make rejection
+    |--------------------------------------------------------------------------
+    |
+    | Wikimedia full-text search matches loosely. Searching "Acura CL 1997"
+    | returns "Honda Accord CL3" photographs, because the chassis code "CL3"
+    | contains the model token "CL". Flagging those is not enough — a search
+    | for an Acura must not display a Honda.
+    |
+    | The rule: if the image names a DIFFERENT known manufacturer and does
+    | not name the searched one, it belongs to another car. When the searched
+    | make is present, or no other make is named at all, we keep the image
+    | and leave the decision to the reviewer.
+    |
+    */
+
+    private const KNOWN_MAKES = ['Acura', 'Honda', 'Toyota', 'Lexus', 'Nissan', 'Ford', 'BMW', 'Mercedes-Benz'];
+
+    public function test_rejects_an_image_naming_a_different_make(): void
+    {
+        $checker = new MakeRelevanceChecker;
+
+        $this->assertTrue($checker->isOffMake(
+            'Acura',
+            'File:Honda Accord CL3 europe.jpg',
+            null,
+            'Silver Honda sedans|Honda Accord (1997, Europe)',
+            self::KNOWN_MAKES,
+        ));
+    }
+
+    public function test_keeps_an_image_that_names_the_searched_make(): void
+    {
+        $checker = new MakeRelevanceChecker;
+
+        $this->assertFalse($checker->isOffMake(
+            'Acura',
+            'File:Clx.jpg',
+            null,
+            'Acura CL-X|Self-published work',
+            self::KNOWN_MAKES,
+        ));
+    }
+
+    public function test_keeps_a_badge_engineered_image_naming_both_makes(): void
+    {
+        // The Acura CL is catalogued by Wikimedia as a Honda Accord. When the
+        // page names both, it is genuinely the searched car and must survive.
+        $checker = new MakeRelevanceChecker;
+
+        $this->assertFalse($checker->isOffMake(
+            'Acura',
+            'File:Honda Accord (Acura CL) 1997.jpg',
+            null,
+            'Honda Accord|Acura CL',
+            self::KNOWN_MAKES,
+        ));
+    }
+
+    public function test_keeps_an_image_that_names_no_make_at_all(): void
+    {
+        // Conservative: absence of evidence is not evidence of a wrong car.
+        $checker = new MakeRelevanceChecker;
+
+        $this->assertFalse($checker->isOffMake(
+            'Acura',
+            'File:Silver coupe on a driveway.jpg',
+            null,
+            'Self-published work',
+            self::KNOWN_MAKES,
+        ));
+    }
+
+    public function test_match_is_case_insensitive_and_ignores_html(): void
+    {
+        $checker = new MakeRelevanceChecker;
+
+        $this->assertTrue($checker->isOffMake(
+            'Acura',
+            'File:HONDA ACCORD (CG1,CG2) China.jpg',
+            '<p>A <b>honda</b> sedan</p>',
+            null,
+            self::KNOWN_MAKES,
+        ));
+    }
+
+    public function test_does_not_reject_on_a_substring_of_a_longer_word(): void
+    {
+        // "Fordson" is a tractor brand, not Ford. Word boundaries matter, or
+        // the filter starts eating legitimate results.
+        $checker = new MakeRelevanceChecker;
+
+        $this->assertFalse($checker->isOffMake(
+            'Acura',
+            'File:Fordson tractor.jpg',
+            null,
+            null,
+            ['Acura', 'Ford'],
+        ));
+    }
+
+    public function test_keeps_everything_when_the_searched_make_is_empty(): void
+    {
+        $checker = new MakeRelevanceChecker;
+
+        $this->assertFalse($checker->isOffMake('', 'File:Honda Accord.jpg', null, null, self::KNOWN_MAKES));
     }
 }

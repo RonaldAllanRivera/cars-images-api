@@ -11,8 +11,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Move bulk search and bulk download onto a real queue worker so long runs are not bound by the web request timeout (the `RunCarSearchJob`, `FetchWikimediaCarImagesForYearJob`, and `DownloadCarImagesJob` classes exist as scaffolding but are not dispatched yet).
 - Persist downloaded images to the `cars` storage disk instead of streaming them straight to the browser.
-- Add a CI pipeline (Pint, PHPUnit against MySQL, `composer validate`).
+- Add a CI pipeline (Pint, PHPUnit, `composer validate`, `composer check-platform-reqs`, `composer audit`).
 - Explore AI-assisted filtering for ambiguous results, replacing the current keyword heuristic (see `PLAN.md`).
+
+## [0.8.1] - 2026-08-24
+
+### Added
+
+- An **edit-path** test for the `__all__` sentinel. The existing create-path test could not fail: `CreateCarSearch::handleRecordCreation()` carries its own `$normalize` closure that masks the loss of the three `dehydrateStateUsing()` callbacks. Deleting all three left the whole suite green. On the *edit* path those callbacks are the only guard, and nothing ever called `save()` on an edit form. The new test is now the single test of 114 that fails when the guard is removed (verified by mutation).
+
+### Fixed
+
+- **A search for one make no longer returns photographs of another.** Querying `Acura 2.2CL/3.0CL 1997` returned four Honda Accords: the model string normalizes to `CL`, and Wikimedia's full-text search matches the Accord's chassis code `CL3`. Eight of nine results for one CSV import were the wrong car. They were correctly flagged `make_confirmed = false`, but flagging is no help when the entire result set is wrong.
+
+  `MakeRelevanceChecker::isOffMake()` now rejects an image when it names a known manufacturer other than the searched one and does not name the searched one, and `CarImageSearchService` drops those before they are ever stored. The rule is deliberately asymmetric:
+
+  - searched make named anywhere → **keep** (this preserves badge engineering, e.g. a page titled `Honda Accord (Acura CL)`, which really is the searched car)
+  - a different known make named → **reject**
+  - no make named at all → **keep**, and leave `make_confirmed = false` for review, because absence of evidence is not evidence of a wrong car
+
+  Matching is on whole words, so `Fordson` is not a Ford. The manufacturer list comes from the `car_makes` catalogue, with a built-in fallback so the filter still works on an unseeded database. Verified live: the same three imported queries went from 9 images (8 wrong) to 1 image — the genuine Acura CL-X.
+
+  **Trade-off:** this favours precision over recall. Two of the three Acura queries now return nothing rather than returning Hondas. Improving recall for sparsely-catalogued models is separate work.
+
+## [0.8.0] - 2026-08-24
+
+Dependency upgrade to the current release of every major dependency, executed in
+verified stages with a test gate between each. See
+`docs/upgrades/2026-08-24-laravel-13-filament-5-upgrade.md`.
+
+### Changed
+
+- **Laravel 12.61 → 13.26.1.** The one high-impact item in the upgrade guide applied here: `VerifyCsrfToken` is renamed to `PreventRequestForgery` and now performs `Sec-Fetch-Site` origin verification. `AdminPanelProvider` registered the old class directly in the panel middleware stack; it now registers `PreventRequestForgery`. Verified over real HTTP, because Laravel's CSRF middleware short-circuits on `runningUnitTests()` and therefore cannot be exercised by the test suite.
+- **Filament 4.11.6 → 5.7.6** and **Livewire 3.8 → 4.4.1**. The deprecated `->actions()` / `->bulkActions()` table builders were migrated to `->recordActions()` / `->toolbarActions()` **first, while still on Filament 4**, where both spellings work and the existing suite could verify the change. As a result the official `filament-v5` upgrade script found nothing left to rewrite.
+- **PHPUnit 11 → 12.5.33**, **Tinker 2 → 3.0.2**, Pint 1.30.5, and every transitive dependency to its current release.
+- `composer.json` now declares its real platform requirements: `php ^8.3` (the true floor, set by Laravel 13 and by Filament's `openspout` dependency) plus `ext-gd`, `ext-intl`, `ext-pdo`, `ext-zip`, and `ext-pdo_sqlite` for development. Previously it claimed `^8.2` and declared no extensions, so an incompatible host failed with a dependency-resolution error instead of a clear platform error.
+
+### Fixed
+
+- **All outstanding security advisories cleared.** Guzzle 7.10.5 → 8.0.2 (non-canonical host bypass; Laravel 13's `illuminate/http` permits the 8.x line), CommonMark 2.8.2 → 2.10.0 (four denial-of-service advisories), PSR-7 2.10.4 → 3.0.0 (pulled up by Guzzle 8), Symfony Mime → 7.4.17. Syncing `vendor/` to the lock also cleared 29 Filament advisories, including the `ImageColumn` XSS advisory — which matters here because the Results page renders `ImageColumn` from external Wikimedia URLs.
+- **PHP limits in the Docker image contradicted the application's own settings** (new `docker/php/php.ini`). `upload_max_filesize` was 2 MB while the CSV upload form advertises 5 MB, so larger uploads were rejected by PHP before Laravel saw them. `memory_limit` was 128 MB against bulk ZIPs that GD-resize up to 100 images — this crashed the test suite outright once Filament 5 raised the baseline footprint. `max_execution_time` was below the app's own 50-second bulk-run cap, making that cap unreachable.
+- **Deployment rewrite rule corrected for Livewire 4** (`DEPLOYMENT.md`). Livewire 4 serves every route from an `APP_KEY`-derived prefix (`/livewire-c3b9adb8/...`) rather than the fixed `/livewire/`. The documented SiteGround `.htaccess` rule hardcoded `/livewire/livewire.js` — the exact rule that exists to stop the Filament login breaking on shared hosting — and is now a pattern that matches both layouts. Confirmed empirically that the prefix changes with `APP_KEY`, so it can never be hardcoded.
+- **`.env.example` was unusable.** Every value was an empty placeholder (`APP_ENV="" # Provide a value...`), breaking the documented setup path twice over: `php artisan key:generate` produced a corrupt key (Laravel's replacement pattern matched only the `APP_KEY=` prefix, leaving the stray `""` appended), and `DB_CONNECTION=""` resolved to an empty string rather than the config default, so `php artisan migrate` failed with `Database connection [] not configured`. Rewritten with working defaults and a placeholder contact address in place of a personal email.
+- **Test suite no longer sleeps for 30 seconds.** `phpunit.xml` inherited the real `.env` retry backoff (5 retries, 2000 ms exponential base), so one failure-path test slept 2+4+8+16 seconds. Retry counts are now pinned for tests. Suite runtime went from 34.6s to ~4s.
+
+### Added
+
+- `TableActionsTest` — pins the registered record and bulk actions on all five tables that used the deprecated builders. `PanelSmokeTest` proves a page still renders; this proves it still has its buttons. Both were confirmed to fail under mutation before being relied on.
+- `Http::preventStrayRequests()` in the base `TestCase`, so no test can silently make a real network call to Wikimedia.
+- A fixed throwaway `APP_KEY` in `phpunit.xml`, so the suite no longer depends on an untracked `.env` and will not fail in CI with `MissingAppKeyException`. (An earlier draft of this entry also claimed the Docker image was missing `pdo_sqlite`; that was wrong — `php:8.3-apache` compiles it in statically. Only the *host* PHP used for ad-hoc runs lacks it.)
+- `CsvUploadFlowTest` — drives a real CSV through the Filament upload form to `handleRecordCreation()` and on into persisted queries; the importer had unit coverage but the form seam had none.
+- `PanelSmokeTest` (16 tests mounting every page in the panel) and `CarSearchFormTest` (the `__all__` sentinel round-trip, year-range normalization, completed-search reuse) — written before the upgrade as its safety net, taking the suite from 75 to 95 tests.
+- `docs/upgrades/2026-08-24-laravel-13-filament-5-upgrade.md` — the staged upgrade design: compatibility matrix, per-stage gates, rollback procedure, and manual QA checklist.
+- Tuned `docker/php/php.ini`, mounted by Docker Compose.
 
 ## [0.7.0] - 2026-06-02
 

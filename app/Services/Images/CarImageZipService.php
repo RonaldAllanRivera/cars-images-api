@@ -12,7 +12,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 class CarImageZipService
 {
     /**
-     * @param Collection<int, CarImage> $images
+     * @param  Collection<int, CarImage>  $images
      */
     public function downloadZip(Collection $images): BinaryFileResponse
     {
@@ -23,7 +23,7 @@ class CarImageZipService
         $zipFileName = 'car-images-'.now()->format('Ymd-His').'.zip';
         $zipPath = storage_path('app/'.$zipFileName);
 
-        $zip = new \ZipArchive();
+        $zip = new \ZipArchive;
 
         if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
             abort(500, 'Unable to create ZIP archive.');

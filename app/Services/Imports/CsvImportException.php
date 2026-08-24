@@ -4,6 +4,4 @@ namespace App\Services\Imports;
 
 use RuntimeException;
 
-class CsvImportException extends RuntimeException
-{
-}
+class CsvImportException extends RuntimeException {}

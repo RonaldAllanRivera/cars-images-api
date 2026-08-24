@@ -1,7 +1,7 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CarImageDownloadController;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return redirect('/admin');

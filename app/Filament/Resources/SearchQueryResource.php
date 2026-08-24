@@ -94,7 +94,7 @@ class SearchQueryResource extends Resource
                         } catch (WikimediaBlockedException $e) {
                             Notification::make()
                                 ->title('Wikimedia blocked')
-                                ->body("HTTP {$e->statusCode} — see Block Events. Retry-After: " . ($e->retryAfterSeconds ?? 'n/a') . 's')
+                                ->body("HTTP {$e->statusCode} — see Block Events. Retry-After: ".($e->retryAfterSeconds ?? 'n/a').'s')
                                 ->danger()
                                 ->persistent()
                                 ->send();
@@ -119,7 +119,7 @@ class SearchQueryResource extends Resource
                     ->icon('heroicon-o-play')
                     ->color('primary')
                     ->requiresConfirmation()
-                    ->modalDescription('Runs up to ' . config('cars-images.bulk_run_max_queries_per_chunk') . ' queries OR ' . config('cars-images.bulk_run_max_seconds_per_chunk') . ' seconds, whichever first. Click again to continue.')
+                    ->modalDescription('Runs up to '.config('cars-images.bulk_run_max_queries_per_chunk').' queries OR '.config('cars-images.bulk_run_max_seconds_per_chunk').' seconds, whichever first. Click again to continue.')
                     ->action(function ($records) {
                         $maxQueries = (int) config('cars-images.bulk_run_max_queries_per_chunk');
                         $maxSeconds = (int) config('cars-images.bulk_run_max_seconds_per_chunk');
@@ -145,7 +145,7 @@ class SearchQueryResource extends Resource
                                 app(RunSearchQueryAction::class)->execute($record);
                             } catch (WikimediaBlockedException $e) {
                                 $blocked = true;
-                                $blockMessage = "HTTP {$e->statusCode} after {$processed} queries. Retry-After: " . ($e->retryAfterSeconds ?? 'n/a') . 's';
+                                $blockMessage = "HTTP {$e->statusCode} after {$processed} queries. Retry-After: ".($e->retryAfterSeconds ?? 'n/a').'s';
                                 break;
                             } catch (Throwable $e) {
                                 // continue past individual non-block failures

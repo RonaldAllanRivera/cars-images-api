@@ -19,6 +19,8 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!-- Fixed throwaway key so the suite runs without a .env (e.g. in CI). -->
+        <env name="APP_KEY" value="base64:5ZbFxG0kJ1uZ3rXQ7yWnT8aPvKcLmS4dHeBqRtYuIoA="/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
@@ -31,5 +33,13 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!--
+            Wikimedia retry/backoff, pinned for the test suite.
+            The real .env uses 5 retries with a 2000ms exponential base, which
+            made a single failure-path test sleep for 2+4+8+16 = 30 real seconds.
+            Retries are still exercised; they just no longer wait.
+        -->
+        <env name="WIKIMEDIA_RETRY_TIMES" value="3"/>
+        <env name="WIKIMEDIA_RETRY_SLEEP_MS" value="0"/>
     </php>
 </phpunit>

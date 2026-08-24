@@ -11,7 +11,7 @@ class ImageResizerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->resizer = new ImageResizer();
+        $this->resizer = new ImageResizer;
     }
 
     private function jpegBytes(int $width, int $height): string

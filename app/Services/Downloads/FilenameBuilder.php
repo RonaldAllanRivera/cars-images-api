@@ -5,7 +5,9 @@ namespace App\Services\Downloads;
 class FilenameBuilder
 {
     private const UNSAFE_CHARS = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
+
     private const MAX_BASE_LENGTH = 200;
+
     private const DEFAULT_EXTENSION = 'jpg';
 
     /**
@@ -27,7 +29,7 @@ class FilenameBuilder
             $extension = self::DEFAULT_EXTENSION;
         }
 
-        return $base . '.' . $extension;
+        return $base.'.'.$extension;
     }
 
     /**
@@ -68,6 +70,7 @@ class FilenameBuilder
 
         if (! isset($usedNames[$candidate])) {
             $usedNames[$candidate] = true;
+
             return $candidate;
         }
 

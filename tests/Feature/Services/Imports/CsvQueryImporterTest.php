@@ -26,7 +26,7 @@ class CsvQueryImporterTest extends TestCase
     public function test_imports_unique_year_make_model_rows(): void
     {
         $user = User::factory()->create();
-        $csv = $this->makeCsv(<<<CSV
+        $csv = $this->makeCsv(<<<'CSV'
         Make,Model,Year,Transmission
         Toyota,RAV4,1997,Automatic 4-spd
         Toyota,Camry,1998,Manual 5-spd
@@ -47,7 +47,7 @@ class CsvQueryImporterTest extends TestCase
     public function test_deduplicates_by_year_make_model_ignoring_transmission(): void
     {
         $user = User::factory()->create();
-        $csv = $this->makeCsv(<<<CSV
+        $csv = $this->makeCsv(<<<'CSV'
         Make,Model,Year,Transmission
         Toyota,RAV4,1997,Automatic 4-spd
         Toyota,RAV4,1997,Manual 5-spd
@@ -65,7 +65,7 @@ class CsvQueryImporterTest extends TestCase
     public function test_sets_from_year_and_to_year_to_same_value(): void
     {
         $user = User::factory()->create();
-        $csv = $this->makeCsv(<<<CSV
+        $csv = $this->makeCsv(<<<'CSV'
         Make,Model,Year,Transmission
         Honda,Civic,2010,Manual
         CSV);
@@ -86,7 +86,7 @@ class CsvQueryImporterTest extends TestCase
         config(['cars-images.csv_import_max_combos' => 2]);
 
         $user = User::factory()->create();
-        $csv = $this->makeCsv(<<<CSV
+        $csv = $this->makeCsv(<<<'CSV'
         Make,Model,Year,Transmission
         Toyota,RAV4,1997,A
         Toyota,Camry,1998,B
@@ -102,7 +102,7 @@ class CsvQueryImporterTest extends TestCase
     public function test_skips_rows_with_invalid_year(): void
     {
         $user = User::factory()->create();
-        $csv = $this->makeCsv(<<<CSV
+        $csv = $this->makeCsv(<<<'CSV'
         Make,Model,Year,Transmission
         Toyota,RAV4,1997,A
         Toyota,Camry,abc,B
@@ -117,7 +117,7 @@ class CsvQueryImporterTest extends TestCase
     public function test_rejects_missing_required_columns(): void
     {
         $user = User::factory()->create();
-        $csv = $this->makeCsv(<<<CSV
+        $csv = $this->makeCsv(<<<'CSV'
         Make,Year,Transmission
         Toyota,1997,A
         CSV);
@@ -131,7 +131,7 @@ class CsvQueryImporterTest extends TestCase
     public function test_captures_transmission_from_first_occurrence(): void
     {
         $user = User::factory()->create();
-        $csv = $this->makeCsv(<<<CSV
+        $csv = $this->makeCsv(<<<'CSV'
         Make,Model,Year,Transmission
         Toyota,RAV4,1997,Automatic 4-spd
         Toyota,RAV4,1997,Manual 5-spd

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\CsvImportResource\Pages;
 
 use App\Filament\Resources\CsvImportResource;
+use App\Models\CsvImport;
 use App\Services\Imports\CsvImportException;
 use App\Services\Imports\CsvQueryImporter;
 use Filament\Forms\Components\FileUpload;
@@ -29,7 +30,7 @@ class CreateCsvImport extends CreateRecord
         ]);
     }
 
-    protected function handleRecordCreation(array $data): \App\Models\CsvImport
+    protected function handleRecordCreation(array $data): CsvImport
     {
         /** @var UploadedFile $file */
         $file = $data['csv_file'];

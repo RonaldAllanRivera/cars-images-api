@@ -103,7 +103,7 @@ class ResultsPageTest extends TestCase
      * Create a confirmed + an off-make image under a CSV-imported search,
      * so both appear in the Results page query (scoped to csv_import_id).
      *
-     * @return array{0: \App\Models\User, 1: CarImage, 2: CarImage}
+     * @return array{0: User, 1: CarImage, 2: CarImage}
      */
     private function makeConfirmedAndOffMake(): array
     {
@@ -235,40 +235,40 @@ class ResultsPageTest extends TestCase
             ->assertCanNotSeeTableRecords([$adHocImage]);
     }
 
-    public function test_filters_to_single_search_when_searchId_param_present(): void
+    public function test_filters_to_single_search_when_search_id_param_present(): void
     {
-        $user = \App\Models\User::factory()->create();
-        $csvImport = \App\Models\CsvImport::create([
+        $user = User::factory()->create();
+        $csvImport = CsvImport::create([
             'original_filename' => 's.csv', 'total_rows' => 2,
             'unique_combos' => 2, 'duplicates_skipped' => 0,
             'imported_by' => $user->id,
         ]);
-        $searchA = \App\Models\CarSearch::create([
+        $searchA = CarSearch::create([
             'make' => 'Toyota', 'model' => 'RAV4', 'from_year' => 1997, 'to_year' => 1997,
             'transparent_background' => false, 'images_per_year' => 5,
             'status' => 'completed', 'requested_by' => $user->id, 'csv_import_id' => $csvImport->id,
         ]);
-        $searchB = \App\Models\CarSearch::create([
+        $searchB = CarSearch::create([
             'make' => 'Honda', 'model' => 'Civic', 'from_year' => 2010, 'to_year' => 2010,
             'transparent_background' => false, 'images_per_year' => 5,
             'status' => 'completed', 'requested_by' => $user->id, 'csv_import_id' => $csvImport->id,
         ]);
-        $imgA = \App\Models\CarImage::create([
+        $imgA = CarImage::create([
             'car_search_id' => $searchA->id, 'provider' => 'wikimedia', 'provider_image_id' => 'A',
             'make' => 'Toyota', 'model' => 'RAV4', 'year' => 1997, 'title' => 'A',
             'source_url' => 'https://example.com/a.jpg', 'thumbnail_url' => 'https://example.com/a.jpg',
             'width' => 800, 'height' => 600, 'download_status' => 'not_downloaded',
         ]);
-        $imgB = \App\Models\CarImage::create([
+        $imgB = CarImage::create([
             'car_search_id' => $searchB->id, 'provider' => 'wikimedia', 'provider_image_id' => 'B',
             'make' => 'Honda', 'model' => 'Civic', 'year' => 2010, 'title' => 'B',
             'source_url' => 'https://example.com/b.jpg', 'thumbnail_url' => 'https://example.com/b.jpg',
             'width' => 800, 'height' => 600, 'download_status' => 'not_downloaded',
         ]);
 
-        \Livewire\Livewire::actingAs($user)
+        Livewire::actingAs($user)
             ->withQueryParams(['searchId' => $searchA->id])
-            ->test(\App\Filament\Pages\Results::class)
+            ->test(Results::class)
             ->assertCanSeeTableRecords([$imgA])
             ->assertCanNotSeeTableRecords([$imgB]);
     }

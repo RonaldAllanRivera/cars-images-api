@@ -4,12 +4,13 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\CarImageResource\Pages;
 use App\Models\CarImage;
+use App\Services\Images\CarImageZipService;
 use BackedEnum;
-use UnitEnum;
 use Filament\Actions;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class CarImageResource extends Resource
 {
@@ -77,7 +78,7 @@ class CarImageResource extends Resource
                     ->sortable(),
             ])
             ->filters([])
-            ->actions([
+            ->recordActions([
                 Actions\Action::make('preview')
                     ->label('Preview')
                     ->icon('heroicon-o-magnifying-glass-plus')
@@ -99,14 +100,14 @@ class CarImageResource extends Resource
                     ]),
                 Actions\DeleteAction::make(),
             ])
-            ->bulkActions([
+            ->toolbarActions([
                 Actions\BulkAction::make('downloadSelected')
                     ->label('Download selected')
                     ->icon('heroicon-o-arrow-down-tray')
                     ->color('primary')
                     ->tooltip('The more images are selected, the slower the download.')
                     ->action(function ($records) {
-                        $service = app(\App\Services\Images\CarImageZipService::class);
+                        $service = app(CarImageZipService::class);
 
                         return $service->downloadZip($records);
                     }),

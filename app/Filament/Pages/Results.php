@@ -9,12 +9,12 @@ use BackedEnum;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Panel;
 use Filament\Tables;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Filament\Panel;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use UnitEnum;
@@ -58,8 +58,8 @@ class Results extends Page implements HasTable
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         return $query->where(function ($q) use ($search) {
                             $q->where('make', 'like', "%{$search}%")
-                              ->orWhere('model', 'like', "%{$search}%")
-                              ->orWhere('year', 'like', "%{$search}%");
+                                ->orWhere('model', 'like', "%{$search}%")
+                                ->orWhere('year', 'like', "%{$search}%");
                         });
                     }),
                 Tables\Columns\TextColumn::make('search.csvImport.original_filename')
@@ -146,7 +146,7 @@ class Results extends Page implements HasTable
                     ->icon('heroicon-o-document-arrow-down')
                     ->action(function (Collection $records, BatchCsvExporter $exporter) {
                         $images = $records->loadMissing('search');
-                        $filename = 'cars-batch-' . now()->format('Ymd-His') . '.csv';
+                        $filename = 'cars-batch-'.now()->format('Ymd-His').'.csv';
 
                         return response()->streamDownload(
                             function () use ($exporter, $images) {
@@ -204,7 +204,7 @@ class Results extends Page implements HasTable
         CarImage::whereIn('id', $images->pluck('id'))
             ->update(['download_status' => 'downloaded']);
 
-        $filename = 'cars-batch-' . now()->format('Ymd-His') . '.zip';
+        $filename = 'cars-batch-'.now()->format('Ymd-His').'.zip';
 
         return response()->download($tmpPath, $filename, [
             'Content-Type' => 'application/zip',

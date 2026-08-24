@@ -18,11 +18,9 @@ class DownloadCarImagesJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * @param array<int> $imageIds
+     * @param  array<int>  $imageIds
      */
-    public function __construct(public array $imageIds)
-    {
-    }
+    public function __construct(public array $imageIds) {}
 
     public function handle(): void
     {

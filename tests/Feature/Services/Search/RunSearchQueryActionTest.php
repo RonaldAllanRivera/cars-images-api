@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Services\Search;
 
+use App\Exceptions\WikimediaBlockedException;
 use App\Models\CarSearch;
 use App\Models\CsvImport;
 use App\Models\User;
@@ -68,7 +69,7 @@ class RunSearchQueryActionTest extends TestCase
         $threw = false;
         try {
             app(RunSearchQueryAction::class)->execute($search);
-        } catch (\App\Exceptions\WikimediaBlockedException $e) {
+        } catch (WikimediaBlockedException $e) {
             $threw = true;
         }
 

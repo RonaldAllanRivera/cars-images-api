@@ -12,8 +12,7 @@ class RunSearchQueryAction
 {
     public function __construct(
         protected CarImageSearchService $searchService,
-    ) {
-    }
+    ) {}
 
     /**
      * Run a single CarSearch synchronously.

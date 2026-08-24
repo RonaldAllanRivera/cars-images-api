@@ -3,6 +3,7 @@
 namespace App\Services\Images;
 
 use App\Exceptions\WikimediaBlockedException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -12,8 +13,7 @@ class WikimediaClient
 {
     public function __construct(
         protected ModelSearchTermNormalizer $modelNormalizer,
-    ) {
-    }
+    ) {}
 
     public function searchCars(
         string $make,
@@ -107,7 +107,7 @@ class WikimediaClient
                 // Exponential backoff: base * 2^(attempt-1)
                 return $retrySleep * (2 ** ($attempt - 1));
             }, function ($exception, $request) use ($blockStatuses) {
-                if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+                if ($exception instanceof RequestException) {
                     return ! in_array($exception->response->status(), $blockStatuses, true);
                 }
 

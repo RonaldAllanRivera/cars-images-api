@@ -13,8 +13,7 @@ class BatchZipBuilder
     public function __construct(
         protected FilenameBuilder $filenames,
         protected ImageResizer $resizer,
-    ) {
-    }
+    ) {}
 
     /**
      * Build a ZIP at $targetPath containing each image, renamed and resized
@@ -32,7 +31,7 @@ class BatchZipBuilder
      */
     public function buildToFile(Collection $images, string $targetPath): int
     {
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         $opened = $zip->open($targetPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
         if ($opened !== true) {
             throw new RuntimeException("Cannot open ZIP at {$targetPath}: code {$opened}");
@@ -94,8 +93,8 @@ class BatchZipBuilder
      *
      * e.g. "1997 Toyota RAV4.jpg" then "1997 Toyota RAV4 2.png" (not "1997 Toyota RAV4.png").
      *
-     * @param  array<string,true>  $usedNames    full filenames already issued (mutated)
-     * @param  array<string,int>   $baseCounters  next counter per base string (mutated)
+     * @param  array<string,true>  $usedNames  full filenames already issued (mutated)
+     * @param  array<string,int>  $baseCounters  next counter per base string (mutated)
      */
     private function buildUniqueByBase(
         int $year,
@@ -112,7 +111,7 @@ class BatchZipBuilder
 
         if (! isset($baseCounters[$baseName])) {
             $baseCounters[$baseName] = 2;
-            $candidate = $baseName . $ext;
+            $candidate = $baseName.$ext;
         } else {
             $counter = $baseCounters[$baseName];
             $candidate = "{$baseName} {$counter}{$ext}";
