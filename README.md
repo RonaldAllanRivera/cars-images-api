@@ -1,338 +1,342 @@
-## Cars Images API (Wikimedia + Filament 4)
+# Cars Images API
 
-Cars Images API is a Laravel 12 + Filament 4 admin panel that integrates with **Wikimedia Commons** to search, cache, and manage high‑resolution **car images**. It supports both ad‑hoc single searches and **bulk CSV‑driven** harvesting of thousands of vehicles, with manual review and web‑optimized downloads.
+A Laravel 12 + Filament 4 application that searches, filters, reviews, and bulk-exports car photography from **Wikimedia Commons** — one vehicle at a time, or thousands of rows from a CSV.
 
-It is designed as an internal tool and portfolio project to demonstrate:
+![PHP](https://img.shields.io/badge/PHP-8.3%2B-777BB4?logo=php&logoColor=white)
+![Laravel](https://img.shields.io/badge/Laravel-12.x-FF2D20?logo=laravel&logoColor=white)
+![Filament](https://img.shields.io/badge/Filament-4.x-FDAE4B)
+![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-75-informational)
 
-- Clean Laravel backend architecture.
-- Modern Filament 4 admin UI.
-- Careful use of external APIs with caching, reuse, and rate‑limit etiquette.
-- Pragmatic handling of real‑world data quality (relevance flagging, server‑side image optimization).
+---
+
+## Contents
+
+- [Overview](#overview)
+- [How it works](#how-it-works)
+- [Features](#features)
+- [Engineering notes](#engineering-notes)
+- [Tech stack](#tech-stack)
+- [Getting started with Docker](#getting-started-with-docker)
+- [Getting started without Docker](#getting-started-without-docker)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [Project structure](#project-structure)
+- [Roadmap](#roadmap)
+- [License](#license)
+
+---
+
+## Overview
+
+Sourcing usable photos for a large vehicle catalogue is tedious: every make/model/year needs its own search, Wikimedia's full-text index is inconsistent, results are frequently mis-filed or not cars at all, and the originals are far too large to ship to a website.
+
+This application turns that into a reviewable pipeline:
+
+1. **Import** a vehicle list (CSV) or run a single ad-hoc search.
+2. **Harvest** images from Wikimedia Commons at a rate the API is happy with.
+3. **Review** what came back, with off-target results flagged rather than silently trusted.
+4. **Export** the approved set as a web-optimized ZIP plus a matching CSV manifest.
+
+Every stage is inspectable in the admin panel, and nothing is thrown away without a human deciding.
+
+---
+
+## How it works
+
+```mermaid
+flowchart TB
+    subgraph Panel["Filament 4 admin panel"]
+        direction LR
+        P1["Upload CSV"]
+        P2["Search Queries"]
+        P4["Car Image Searches (ad-hoc)"]
+        P3["Results"]
+    end
+
+    subgraph Services["Application services"]
+        direction TB
+        IMP["CsvQueryImporter<br/>parse - dedupe - cap"]
+        ACT["RunSearchQueryAction<br/>status + block logging"]
+        SVC["CarImageSearchService<br/>multi-year orchestration"]
+        WMC["WikimediaClient<br/>query - cache - filter"]
+        EXP["BatchZipBuilder + ImageResizer<br/>BatchCsvExporter + FilenameBuilder"]
+    end
+
+    subgraph DB["MySQL"]
+        direction LR
+        T3[("csv_imports")]
+        T1[("car_searches")]
+        T2[("car_images")]
+        T4[("wikimedia_block_events")]
+    end
+
+    WM(["Wikimedia Commons API"])
+    DL{{"ZIP + CSV manifest"}}
+
+    P1 --> IMP
+    IMP --> T3
+    IMP --> T1
+    P2 --> ACT
+    P4 --> SVC
+    ACT --> SVC
+    SVC --> WMC
+    WMC --> WM
+    WM --> WMC
+    SVC --> T2
+    ACT -. "429 / 403 / 503" .-> T4
+    T2 --> P3
+    P3 --> EXP
+    EXP --> DL
+```
+
+The two entry points share one engine. An **ad-hoc search** (`car_searches` with a null `csv_import_id`) and a **CSV-imported query** (`csv_import_id` set) are the same row type, scoped apart at the resource level, and both flow through `CarImageSearchService`.
 
 ---
 
 ## Features
 
-- **Car-focused Wikimedia search**
-  - Query Wikimedia Commons for images by make, model, year range, color, transmission, and transparent background.
-  - Multi‑year searches: one request per year in the range.
-  - Flexible filters: "All models", "All colors", and "All transmissions" options let you widen or narrow searches quickly.
-- **Dynamic search form**
-  - Make and model are linked: when you select a make, the model dropdown updates with relevant models.
-  - Popular makes and models preconfigured for fast searches.
-- **Caching and reuse**
-  - Searches are stored in `car_searches` and associated images in `car_images`.
-  - Identical completed searches are reused instead of hitting Wikimedia again.
-- **Result quality filter**
-  - Lightweight filter that tries to drop obvious non‑car images (e.g. flowers / plants, or clearly non-car academic/journal pages) using image title, description, categories, and metadata.
-  - Non‑image files (PDFs, documents) returned by Wikimedia's File namespace are excluded by MIME type.
-  - **Year‑relaxation fallback**: when a year‑specific search returns nothing, it retries once without the year so sparse models still return results.
-- **Make‑relevance flagging**
-  - Each stored image records whether the searched **make actually appears** in its title, description, or categories. The Results page shows a **"Make match"** badge (Confirmed / Not confirmed) and a filter to show only confirmed matches.
-  - This surfaces a real Wikimedia data quirk: badge‑engineered or region‑specific models are filed under another make (e.g. the Acura CL is catalogued as a "Honda Accord"), so an "Acura" search may return the same car under "Honda". Nothing is hidden — you review and decide, with the borderline ones flagged for your eye.
-- **CSV bulk search & download** (three‑page workflow under **Cars**)
-  - **Upload CSV** of `Make, Model, Year, Transmission` rows; deduplicated by `(Year, Make, Model)`, capped per upload, stored as pending search queries.
-  - **Search Queries**: review imported queries and run them manually — one at a time or in capped bulk batches — with a live loader. Wikimedia rate‑limit responses (429/403/503) auto‑pause the run and are logged.
-  - **Results**: browse images, then **Download selected as ZIP**, **Download Confirmed as ZIP** (only images whose make matched — see make‑relevance flagging), or **Export selected as CSV** (manifest), with `YEAR MAKE MODEL.jpg` filenames and duplicate suffixes. Bulk ZIPs are capped (`CARS_BULK_DOWNLOAD_MAX_IMAGES`, default 100) since they are built synchronously — large sets are downloaded in batches.
-- **Web‑optimized downloads**
-  - Bulk ZIP images are resized server‑side (GD) to a configurable max width (default 1600px) and re‑encoded as JPEG — typically ~85% smaller than the originals. (Wikimedia blocks on‑demand thumbnail generation from server IPs, so resizing is done locally.)
-- **Filament admin experience**
-  - Dedicated navigation group for Cars.
-  - Car Searches and Car Images tables with sortable, searchable columns and default **100 rows per page** for efficient review.
-  - Per-row and bulk **Delete** actions for images, a **Refresh from Wikimedia** action on each search to clear images + cache and re-run with the latest filters, and a fast image **Preview** modal with a direct **Download** button that streams the image via an internal endpoint and updates the `download_status` badge in real time.
-  - Bulk **Download selected** action on image tables that streams all selected images as a single ZIP archive with unique filenames to your local machine.
- - **Car make & model catalog**
-   - Dedicated **Car Makes** admin page where you can define a make once and attach multiple models using a repeater.
-   - These makes and models populate the options for the Car Image Search form, with sensible defaults seeded for common brands.
+### Search and harvesting
+
+- Query Wikimedia Commons by **make, model, year range, color, transmission**, and transparent background — one API request per year in the range.
+- **Linked make/model dropdowns** driven by a curated catalogue, with `All models` / `All colors` / `All transmissions` options to widen a search.
+- **Result caching and reuse.** Searches persist to `car_searches`; an identical completed search reuses its stored images instead of calling Wikimedia again.
+- **Year-relaxation fallback.** When a year-specific query returns nothing, it retries once without the year, so sparsely documented models still return results.
+- **Non-car and non-image filtering.** Wikimedia's `File:` namespace also holds PDFs, DjVu documents, botanical photos and journal figures; these are dropped by MIME type and by a title/description/category heuristic.
+
+### Review
+
+- **Make-match flagging.** Each image records whether the searched make actually appears in its title, description, or categories, shown as a **Confirmed / Not confirmed** badge with a filter. Nothing is hidden — borderline results are surfaced for a human call.
+- Sortable, searchable tables with thumbnails, live-polling status badges, preview modals, and per-row or bulk delete.
+
+### Export
+
+- **Download Selected as ZIP** — every selected image, resized and renamed.
+- **Download Confirmed as ZIP** — the same, narrowed to make-confirmed images only.
+- **Export Selected as CSV** — a manifest whose `Filename` column matches the ZIP entries exactly, so the archive and the spreadsheet never drift apart.
+- Filenames are deterministic and filesystem-safe: `1997 Toyota RAV4.jpg`, with duplicates suffixed `1997 Toyota RAV4 2.jpg`.
+
+### Administration
+
+- Dedicated **Car Makes** catalogue (makes with a models repeater) that feeds the search dropdowns.
+- **Admin Users** management with hashed passwords and blank-to-keep password editing.
+- Wikimedia block events recorded and visible, rather than failing silently.
+
+---
+
+## Engineering notes
+
+The parts of this project worth reading are the ones that exist because the obvious approach did not survive contact with the real API.
+
+**Wikimedia rate-limit etiquette is built in, not bolted on.** Requests send a descriptive, contactable `User-Agent` (Wikimedia's UA policy rejects generic ones with 429/403), set `maxlag=5` so the app backs off when replication lags, cache for 24 hours, pause one second between bulk queries, and retry transient failures with exponential backoff. A 429/403/503 raises a typed `WikimediaBlockedException`, is persisted to `wikimedia_block_events`, and **halts the bulk loop** — the failure mode of a harvesting tool should never be to keep hammering.
+
+**Thumbnails are generated locally because the CDN refuses.** The first implementation requested Wikimedia's `/thumb/` URLs. Those return HTTP 400 when requested from datacenter and shared-hosting IPs, so it worked in development and failed in production. The fix was to download the original and resize with GD (`ImageResizer`, default 1600px max width, JPEG re-encode) — roughly an 85% size reduction, and host-independent. Unsupported formats fall through with the original bytes intact, so an image is never lost from an archive.
+
+**CSV model strings are normalized before querying.** Vehicle data encodes models as engine displacement plus trim (`2.2CL/3.0CL`); Wikimedia catalogues the bare model (`CL`). `ModelSearchTermNormalizer` strips the displacement prefix and collapses slash-separated variants, but keeps the original whenever stripping would leave too little to search on.
+
+**Transmission is deliberately dropped from CSV-driven queries.** Image pages never say "Automatic 4-spd", so including it returned zero results across the board. It is kept as manifest metadata; ad-hoc searches, where the user typed it on purpose, still use it.
+
+**Off-make results are flagged, not filtered.** Badge-engineered and region-specific models are catalogued under a different marque — an Acura CL is filed as a Honda Accord. Auto-rejecting those would throw away correct photographs of the right car; auto-accepting them hides a real data quirk. `MakeRelevanceChecker` marks the discrepancy and lets the reviewer decide.
+
+**Synchronous work is capped rather than left to time out.** Bulk runs stop at 50 queries or 50 seconds per click and bulk ZIPs at 100 images, because both are built inside a single web request on shared hosting. Each cap is a config value with an explicit reason in `config/cars-images.php`, and the UI tells the user to click again rather than dying at the gateway timeout.
+
+**Failure paths are explicit.** A per-image fetch failure skips that image instead of aborting the archive; an archive where everything failed reports it instead of serving a zero-entry ZIP; a search that throws is forced to `failed` even though its status update was inside the rolled-back transaction.
 
 ---
 
 ## Tech stack
 
-- **Backend**: Laravel 12 (PHP 8.3+)
-- **Admin UI**: Filament 4 panel
-- **External API**: MediaWiki / Wikimedia Commons
-- **Database**: MySQL 8 (Docker for local dev — see "Getting started with Docker" below)
-- **Storage**: Laravel `storage` with a dedicated `cars` disk for downloads
+| Layer | Choice |
+| --- | --- |
+| Runtime | PHP 8.3+ (`ext-gd`, `ext-zip`, `ext-intl`, `ext-pdo_mysql`) |
+| Framework | Laravel 12.x |
+| Admin UI | Filament 4.x (Livewire 3) |
+| Database | MySQL 8.0 |
+| External API | MediaWiki / Wikimedia Commons |
+| Image processing | GD |
+| Local environment | Docker (Apache + mod_php + MySQL) |
+| Tests | PHPUnit 11 (requires `ext-pdo_sqlite`) |
 
-> Kept current on the latest Laravel 12.x / Filament 4.x releases. Laravel 13 is
-> not yet adopted because Filament 4 and Livewire 3 do not support it yet; the
-> upgrade will follow once that ecosystem ships Laravel 13 compatibility.
-
----
-
-## Architecture overview
-
-- **Wikimedia client** (`App\Services\Images\WikimediaClient`)
-  - Wraps MediaWiki API calls.
-  - Builds queries with make, model, year, color, transmission, and filters non‑car results.
-  - Caches results per (make, model, year, color, transmission, transparent) combination.
-
-- **Search service** (`App\Services\Images\CarImageSearchService`)
-  - Coordinates multi‑year searches.
-  - Normalizes year ranges (handles reversed from/to values).
-  - Reuses existing completed searches when parameters match.
-
-- **Jobs**
-  - `RunCarSearchJob`, `FetchWikimediaCarImagesForYearJob`, `DownloadCarImagesJob` implemented for future asynchronous processing.
-  - In local development, searches currently run synchronously for easier debugging.
-
-- **Filament resources**
-  - `CarSearchResource` – search form, search history, status, and related images.
-  - `CarImageResource` – global view of all cached images.
-  - `CarMakeResource` – catalog of car makes and their models, used to drive make/model dropdowns on the search form.
-  - `UserResource` – simple admin user management (name, unique email, password) so you can add additional Filament admins from the UI.
-
-For more detail, see `PLAN.md` and `CHAT.md` in the project root.
+> **On Laravel 13:** the project tracks the latest Laravel 12.x and Filament 4.x releases. Laravel 13 is intentionally not adopted yet — Filament 4 and Livewire 3 do not support it. The upgrade follows once that ecosystem ships compatibility.
 
 ---
 
-## Getting started with Docker (recommended for SiteGround parity)
+## Getting started with Docker
 
-This stack mirrors SiteGround shared hosting — Apache + mod_php + MySQL, with `file` cache/session and `sync` queue. Use it locally so routing and `.htaccess` bugs surface here, not after upload.
+The Docker stack mirrors SiteGround shared hosting — Apache + mod_php + MySQL, with `file` cache/session and a `sync` queue — so routing and `.htaccess` problems surface locally instead of after deployment.
 
-### Prerequisites
-
-- Docker Engine 24+ and Docker Compose v2.
-
-### Bring it up
+**Prerequisites:** Docker Engine 24+ and Docker Compose v2.
 
 ```bash
 cp .env.example .env
-# Edit .env — set APP_NAME, DB_DATABASE, DB_USERNAME, DB_PASSWORD before continuing
+# The defaults work as-is for Docker. Before harvesting, set WIKIMEDIA_USER_AGENT
+# to a string identifying your deployment with a real contact address.
 docker compose build
 docker compose up -d
 docker compose exec app composer install
 docker compose exec app php artisan key:generate
 docker compose exec app php artisan migrate --seed
+docker compose exec app php artisan storage:link
 ```
 
-Then open `http://localhost:8080` and the Filament admin at `http://localhost:8080/admin`.
+The panel is then at `http://localhost:8080/admin` — change `APP_PORT` in `.env` to use a different host port.
 
-### Notes
+**Notes**
 
-- Override the host port via `APP_PORT` in `.env` (e.g. `APP_PORT=80`).
-- The `app` container runs as your host user (UID/GID 1000 by default — override with `WWWUSER` / `WWWGROUP` build args if your host user differs).
-- MySQL data persists in the named volume `cars-mysql-data`; `docker compose down` keeps it, `docker compose down -v` wipes it.
-- Re-run `docker compose exec app composer install` after pulling changes that touch `composer.json` / `composer.lock`.
+- `docker compose down` keeps the `cars-mysql-data` volume; `docker compose down -v` wipes the database.
+- The `app` container runs as UID/GID 1000 — override with the `WWWUSER` / `WWWGROUP` build args if your host user differs.
+- Re-run `docker compose exec app composer install` after pulling changes to `composer.json` / `composer.lock`.
+- MySQL is published on `${FORWARD_DB_PORT}` (default `3307`) if you want to attach a GUI client.
 
 ---
 
-## Getting started (local development with Laragon)
+## Getting started without Docker
 
-### Prerequisites
-
-- PHP 8.3+ (required — `composer.lock` pins packages that need 8.3)
-- Composer
-- MySQL (e.g. via Laragon)
-- Node.js (optional, only if you plan to customize frontend assets)
-
-### 1. Clone the repository
-
-Clone into your Laragon `www` directory:
+**Prerequisites:** PHP 8.3+ with `gd`, `zip`, `intl`, `pdo_mysql` (plus `pdo_sqlite` to run the tests), Composer, MySQL 8, and Node.js only if you intend to rebuild frontend assets.
 
 ```bash
-cd C:\laragon\www
 git clone <YOUR_REPO_URL> cars-images-api
 cd cars-images-api
-```
 
-### 2. Install PHP dependencies
-
-```bash
 composer install
-```
-
-### 3. Configure environment
-
-Copy `.env.example` to `.env` (or bring over your existing `.env`):
-
-```bash
-cp .env.example .env
-```
-
-Update `.env` to match your local database and app URL. Example:
-
-```env
-APP_URL=http://cars-images-api.test
-
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=cars-images-api
-DB_USERNAME=root
-DB_PASSWORD=
-
-QUEUE_CONNECTION=sync
-
-WIKIMEDIA_BASE_URL=https://commons.wikimedia.org/w/api.php
-WIKIMEDIA_TIMEOUT=10
-WIKIMEDIA_RETRY_TIMES=3
-WIKIMEDIA_RETRY_SLEEP_MS=200
-WIKIMEDIA_USER_AGENT="CarsImagesApi/1.0 (Laravel)"
-WIKIMEDIA_CACHE_TTL=3600
-```
-
-Then generate the app key (only needed once per environment):
-
-```bash
+cp .env.example .env          # set DB_HOST=127.0.0.1 and the DB_* values for your machine
 php artisan key:generate
-```
-
-### 4. Run migrations and seed admin user
-
-```bash
 php artisan migrate --seed
-```
-
-> The seeder creates a Filament admin user you can log in with, and also seeds a default list of **car makes and models** used by the Car Image Search form.
-
-### 5. Create storage symlink
-
-```bash
 php artisan storage:link
+php artisan serve             # or point Laragon / Valet / nginx at public/
 ```
 
-### 6. Serve the app
+`migrate --seed` creates the Filament admin user and seeds the default make/model catalogue used by the search form.
 
-With Laragon you can visit:
-
-- Filament admin: `http://cars-images-api.test/admin`
-- Car Image Searches: `http://cars-images-api.test/admin/car-searches`
+> **Change the seeded admin password before exposing the panel.** `FilamentAdminUserSeeder` creates its account from credentials committed to this repository, and because it uses `updateOrCreate`, re-running the seeder resets that password back to the committed value.
 
 ---
 
-## Setting up on a new PC (using this repo as the main source)
+## Configuration
 
-When you move to a new machine, treat this repository as the single source of truth:
+Wikimedia integration lives in `config/images.php`; all application limits live in `config/cars-images.php`. Both are environment-driven.
 
-1. **Ensure your work is pushed from the old PC**
-   - Commit all changes.
-   - Push to your remote (e.g. GitHub, GitLab):
-
-     ```bash
-     git add .
-     git commit -m "chore: sync local changes"
-     git push origin main
-     ```
-
-2. **On the new PC, clone the repo**
-
-   ```bash
-   cd C:\laragon\www
-   git clone <YOUR_REPO_URL> cars-images-api
-   cd cars-images-api
-   ```
-
-3. **Install dependencies and configure `.env`**
-   - Repeat steps from **Getting started**:
-     - `composer install`
-     - Copy or recreate `.env`.
-     - `php artisan key:generate` (if needed).
-
-4. **Recreate the database schema and admin user**
-
-   ```bash
-   php artisan migrate --seed
-   ```
-
-5. **Recreate the storage symlink**
-
-   ```bash
-   php artisan storage:link
-   ```
-
-6. **Confirm the Git remote**
-
-   ```bash
-   git remote -v
-   ```
-
-   Make sure it points to your main hosted repository (the same URL you cloned from). This way, this new machine is now your primary local clone.
-
-After this, you can continue development on the new PC and push/pull as normal.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `WIKIMEDIA_BASE_URL` | `https://commons.wikimedia.org/w/api.php` | MediaWiki API endpoint |
+| `WIKIMEDIA_USER_AGENT` | — | **Set this to a real, contactable UA.** Wikimedia blocks generic agents |
+| `WIKIMEDIA_TIMEOUT` | `10` | Per-request timeout (seconds) |
+| `WIKIMEDIA_RETRY_TIMES` | `3` | Retry attempts for transient errors |
+| `WIKIMEDIA_RETRY_SLEEP_MS` | `200` | Backoff base; doubles per attempt |
+| `WIKIMEDIA_CACHE_TTL` | `3600` | Search-result cache lifetime (seconds) |
+| `WIKIMEDIA_MAXLAG` | `5` | MediaWiki `maxlag` courtesy parameter |
+| `CSV_IMPORT_MAX_COMBOS` | `1000` | Reject an upload above this many unique queries |
+| `CSV_IMPORT_DEFAULT_IMAGES_PER_YEAR` | `5` | Images requested per imported query |
+| `CARS_BULK_RUN_MAX_QUERIES` | `50` | Queries per bulk-run click |
+| `CARS_BULK_RUN_MAX_SECONDS` | `50` | Wall-clock ceiling per bulk-run click |
+| `CARS_BULK_RUN_SLEEP_SECONDS` | `1` | Pause between bulk queries |
+| `CARS_DOWNLOAD_MAX_WIDTH` | `1600` | Max width for ZIP images (resized locally) |
+| `CARS_DOWNLOAD_JPEG_QUALITY` | `82` | JPEG quality for resized images |
+| `CARS_BULK_DOWNLOAD_MAX_IMAGES` | `100` | Max images per synchronous ZIP |
 
 ---
 
 ## Usage
 
-### CSV Bulk Search and Download
+### CSV bulk pipeline
 
-For bulk harvesting, use the three-page CSV workflow under the **Cars** navigation group:
+The three pages under the **Cars** navigation group run left to right.
 
-1. **Upload CSV** (`/admin/csv-imports/create`) — drop in a CSV with columns `Make, Model, Year, Transmission`. Rows are deduplicated by `(Year, Make, Model)`. Uploads with more than `CSV_IMPORT_MAX_COMBOS` unique combos (default 1,000) are rejected; split the CSV externally first.
-2. **Search Queries** (`/admin/search-queries`) — review the imported queries. Click `[Run]` per-row, or select multiple and click `[Run Selected]`. The bulk run caps at 50 queries or 50 seconds per click — click again to continue.
-3. **Results** (`/admin/results`) — browse images from completed queries. Select images and use `[Download Selected as ZIP]` (renamed files inside) or `[Export Selected as CSV]` (manifest).
+**1. Upload CSV** (`/admin/csv-imports/create`)
 
-**Filename format:** `"YEAR MAKE MODEL.ext"` — e.g. `1997 Toyota RAV4.jpg`. Duplicates within an export get a numeric suffix: `1997 Toyota RAV4.jpg`, `1997 Toyota RAV4 2.jpg`.
+Required columns are `Make`, `Model`, `Year`; `Transmission` is optional and carried through to the manifest. Rows are deduplicated by `(Year, Make, Model)`, rows with a missing field or an implausible year are skipped and counted, and an upload producing more than `CSV_IMPORT_MAX_COMBOS` unique queries is rejected outright rather than half-imported.
 
-**Wikimedia etiquette is on by default:** honest User-Agent with contact info, `maxlag=5`, 24h cache, 1-second throttle between bulk queries, exponential backoff on transient errors. Any 429/403/503 response auto-pauses the bulk loop and writes a `wikimedia_block_events` row.
+```csv
+Make,Model,Year,Transmission
+Toyota,RAV4,1997,Automatic 4-spd
+Acura,2.2CL/3.0CL,1998,Manual 5-spd
+```
 
-### Running a car image search
+**2. Search Queries** (`/admin/search-queries`)
 
-1. Sign in to Filament at `/admin`.
-2. Navigate to **Cars → Car Image Searches** and click **Create**.
-3. Use the form:
-   - Choose a **Make** – the **Model** dropdown automatically updates to show popular models for that make, with an **All models** option to search across models.
-   - Set **From year / To year** (the service normalizes the range if they are reversed).
-   - Optionally pick a **Color** and **Transmission**, or leave them on **All colors** / **All transmissions** to avoid filtering by those fields.
-   - Toggle **Transparent background** and adjust **Images per year**.
-4. Submit the form.
-   - The app calls the Wikimedia API for each year, filters results to likely car images, stores them in `car_images`, and redirects to the search **View** page.
-5. On the **View** page, scroll to the **Images** relation to see thumbnails and metadata.
+Review the imported queries, then **Run** a single row or select many and **Run Selected**. Bulk runs process up to `CARS_BULK_RUN_MAX_QUERIES` queries or `CARS_BULK_RUN_MAX_SECONDS` seconds per click — click again to continue. A Wikimedia block pauses the run, raises a persistent notification, and records the event.
 
-### Managing car makes and models
+**3. Results** (`/admin/results`)
 
-- Navigate to **Cars → Car Makes** to manage the catalog of makes and models.
-- When you create or edit a car make, you can add multiple models via the **Models** repeater field.
-- The Car Image Search form will use these values as its make/model options (falling back to built-in defaults if the tables are empty).
+Browse the harvested images, filter by source CSV or by **Make match**, then export the selection as a ZIP, a confirmed-only ZIP, or a CSV manifest.
 
-### Managing admin users
+### Ad-hoc search
 
-- Navigate to **System → Admin Users** to manage Filament admin accounts.
-- Use **Create** to add a new admin with name, email, and password. The password is stored securely using Laravel's hashed cast.
-- When editing a user, leave the password blank to keep it unchanged, or enter a new password to update it.
+**Cars → Car Image Searches → Create.** Pick a make (the model list follows it), set a year range — reversed ranges are normalized — and optionally a color, transmission, or transparent-background toggle. The search runs synchronously and redirects to its view page, where the **Images** relation holds the results.
 
-### Refreshing or re-running a search
+From that view page, **Refresh from Wikimedia** deletes the search's images, clears the cached responses for its years, and re-runs with the current filters. Editing the search instead re-runs it with the *new* filters.
 
-- From a search view page (**Cars → Car Image Searches → View**), use **Refresh from Wikimedia** in the header actions to:
-  - Delete existing images for that search.
-  - Clear cached Wikimedia responses for its years.
-  - Re-run the search synchronously using the **current** filters (useful when filters are correct but you want a fresh set of results).
-- To **search again with different filters**, click **Edit** on the search, adjust fields such as Make/Model, year range, Color, or Transmission, and click **Save**. After saving, the app deletes the old images for that search, re-runs the Wikimedia calls with the **updated** filters, and repopulates the Images relation with the new results.
+### Catalogue and users
 
-### Cleaning up incorrect images
-
-- From **Cars → Car Images**, use the per-row **Delete** action or the bulk **Delete selected** action to remove bad images.
-- From a specific search's **Images** relation, you can also delete individual or multiple images using the same delete actions.
-
-### Previewing and downloading images
-
-- From **Cars → Car Images** or a search's **Images** relation:
-  - Click a thumbnail or the **Preview** action to open a modal with a larger image (up to ~400×400), source URL, and title.
-  - Use the **Download** button in the modal footer to download the full image via an internal download endpoint. When the download succeeds, the **Download status** badge for that image flips to a green `downloaded` state automatically, without needing to refresh the page.
-  - To download many images at once, select them using the table checkboxes and use the **Download selected** bulk action. The app streams a ZIP file containing the selected images to your browser; the more images you select, the longer the ZIP creation and download will take.
-
-### Browsing cached images
-
-- Go to **Cars → Car Images** to browse all stored images.
-- Both Car Searches and Car Images lists default to **100 rows per page**; use the pagination selector to change the page size.
-
-### Search behaviour and caching
-
-- The **first** time you run a make/model/year/color/transmission combination, the app calls Wikimedia and caches the results in the database.
-- Subsequent searches with the **same parameters** reuse the existing completed `CarSearch` and its `CarImage` records instead of calling Wikimedia again.
-- When you leave **Model**, **Color**, or **Transmission** on their **All ...** options, those fields are stored as `null` in the database, but Filament forms and tables always render them as `All` (for example, `All models`, `All colors`, `All transmissions`) so it is obvious that no filter was applied.
-- The Wikimedia client applies a lightweight filter to drop obvious non-car images (e.g. flowers / plants, or clearly non-car academic/journal pages) using title, description, categories, and other metadata.
-- Using **Refresh from Wikimedia** invalidates both the cached images and the underlying Wikimedia cache for that search's years, so new results are fetched with the current filters.
+**Cars → Car Makes** manages makes and their models (used by the search dropdowns; built-in defaults apply when the tables are empty). **System → Admin Users** manages panel accounts — leave the password blank when editing to keep the existing one.
 
 ---
 
-## Roadmap / next steps
+## Testing
 
-- Switch from synchronous to asynchronous queue processing in non‑local environments.
-- Implement bulk download to the `cars` storage disk and CSV export of selected images.
-- Add stronger rate limiting, richer logging/metrics, and automated tests.
-- Explore optional AI-based filtering for ambiguous results (see `PLAN.md` section on AI-based filtering).
+```bash
+php artisan test                        # whole suite
+php artisan test --testsuite=Unit       # fast, no database
+php artisan test --filter=BatchZipBuilder
+```
 
+75 tests across 18 files: 34 unit tests over the pure helpers (filename building, image resizing, make relevance, model normalization) and 41 feature tests over the CSV importer, ZIP/CSV export, Wikimedia block handling and recall fallback, resource scoping, and the Results page bulk actions.
 
+> Feature tests run against an in-memory SQLite database (see `phpunit.xml`), so **`ext-pdo_sqlite` must be installed** — without it every database-backed test errors with `could not find driver` while the unit tests still pass.
+
+Code style is enforced with Pint:
+
+```bash
+./vendor/bin/pint --test    # check
+./vendor/bin/pint           # fix
+```
+
+---
+
+## Deployment
+
+`DEPLOYMENT.md` covers deployment to SiteGround shared hosting in detail: directory layout, serving Laravel from `public/`, the `.htaccess` rewrite that keeps `/livewire/livewire.js` reachable, environment configuration, and troubleshooting. The Docker stack above deliberately mirrors that environment.
+
+---
+
+## Project structure
+
+```
+app/
+├── Exceptions/          WikimediaBlockedException — typed rate-limit signal
+├── Filament/
+│   ├── Pages/           Results (bulk export surface)
+│   └── Resources/       CsvImport, SearchQuery, CarSearch, CarImage, CarMake, User
+├── Http/Controllers/    Single-image authenticated download endpoint
+├── Jobs/                Queue scaffolding (not dispatched yet — see Roadmap)
+├── Models/              CarSearch, CarImage, CsvImport, CarMake, CarModel, WikimediaBlockEvent, User
+└── Services/
+    ├── Downloads/       BatchZipBuilder, BatchCsvExporter, ImageResizer, FilenameBuilder
+    ├── Images/          WikimediaClient, CarImageSearchService, MakeRelevanceChecker, ModelSearchTermNormalizer
+    ├── Imports/         CsvQueryImporter
+    └── Search/          RunSearchQueryAction
+config/
+├── cars-images.php      Import caps, bulk-run pacing, download sizing
+└── images.php           Wikimedia client settings
+docs/                    Design specs and implementation plans per feature
+tests/{Unit,Feature}/    Mirrors the app/ layout
+```
+
+Background on the original design and decision history lives in `PLAN.md`, `CHAT.md`, and `docs/`.
+
+---
+
+## Roadmap
+
+- Move bulk search and bulk download onto a queue worker, retiring the synchronous caps (`app/Jobs/` holds the scaffolding).
+- Persist exports to the `cars` storage disk instead of streaming them straight to the browser.
+- Add a CI pipeline running Pint and PHPUnit against MySQL.
+- Replace the keyword-based non-car heuristic with AI-assisted classification for ambiguous results (see `PLAN.md`).
+
+---
+
+## License
+
+No license file ships with this repository; the underlying Laravel skeleton it was generated from is MIT-licensed. Images retrieved through this tool remain subject to their individual Wikimedia Commons licences, which are stored per image in the `license` and `attribution` columns.

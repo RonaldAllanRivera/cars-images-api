@@ -2,8 +2,8 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "laravel/laravel",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "description": "Laravel 12 + Filament 4 admin panel for searching, reviewing, and bulk-exporting car images from Wikimedia Commons.",
+    "keywords": ["laravel", "filament", "wikimedia", "car-images", "bulk-export"],
     "license": "MIT",
     "require": {
         "php": "^8.2",
