@@ -8,6 +8,7 @@ use App\Models\CarSearch;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Support\Collection;
+use Throwable;
 
 class CarImageSearchService
 {
@@ -84,32 +85,27 @@ class CarImageSearchService
 
     public function runSearch(CarSearch $search): Collection
     {
-        $results = collect();
-
-        $this->db->transaction(function () use ($search, &$results) {
-            $search->update(['status' => 'running']);
-
-            $years = range($search->from_year, $search->to_year);
-
-            foreach ($years as $year) {
-                $yearResults = $this->fetchAndStoreForYear($search, $year, $search->images_per_year);
-
-                $results = $results->merge($yearResults);
-            }
-
-            $search->update(['status' => 'completed']);
-        });
-
-        return $results;
+        return $this->db->transaction(fn () => $this->executeSearch($search));
     }
 
+    /**
+     * Delete the search's images and fetch them again.
+     *
+     * The delete and the refetch share ONE transaction. They used to be
+     * separate: the delete committed immediately, so when Wikimedia answered
+     * 429 the refetch rolled back and restored nothing — every reviewed image
+     * was gone for good, and the row still read `completed` because the
+     * `status = running` update rolled back with it.
+     *
+     * On failure the search is forced to `failed` (outside the rolled-back
+     * transaction) and the exception is re-thrown, so the caller can report
+     * it rather than showing a search that quietly lost its contents.
+     */
     public function refreshSearch(CarSearch $search): Collection
     {
-        CarImage::where('car_search_id', $search->id)->delete();
-
-        $years = range($search->from_year, $search->to_year);
-
-        foreach ($years as $year) {
+        // Cache eviction is not database state, so it stays outside the
+        // transaction — re-fetching is harmless if the refresh then fails.
+        foreach (range($search->from_year, $search->to_year) as $year) {
             $this->wikimedia->clearSearchCache(
                 $search->make,
                 $search->model,
@@ -121,7 +117,48 @@ class CarImageSearchService
             );
         }
 
-        return $this->runSearch($search->fresh());
+        try {
+            return $this->db->transaction(function () use ($search) {
+                CarImage::where('car_search_id', $search->id)->delete();
+
+                return $this->executeSearch($search->fresh());
+            });
+        } catch (Throwable $e) {
+            $this->markFailed($search);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * The search itself, assuming a transaction is already open.
+     */
+    private function executeSearch(CarSearch $search): Collection
+    {
+        $results = collect();
+
+        $search->update(['status' => 'running']);
+
+        foreach (range($search->from_year, $search->to_year) as $year) {
+            $results = $results->merge(
+                $this->fetchAndStoreForYear($search, $year, $search->images_per_year)
+            );
+        }
+
+        $search->update(['status' => 'completed']);
+
+        return $results;
+    }
+
+    /**
+     * Force a terminal `failed` status.
+     *
+     * `forceFill()->save()` rather than `update()` because the surrounding
+     * transaction has already rolled back the in-flight status change.
+     */
+    private function markFailed(CarSearch $search): void
+    {
+        $search->forceFill(['status' => 'failed'])->save();
     }
 
     public function fetchAndStoreForYear(CarSearch $search, int $year, int $limit): Collection
@@ -154,16 +191,22 @@ class CarImageSearchService
             ->map(function (array $image) use ($search, $year) {
                 $categories = $this->categoriesOf($image);
 
+                // The match key includes the owning search AND the year.
+                // Keyed on (provider, provider_image_id) alone it was global:
+                // a file returned by two searches was MOVED to whichever ran
+                // last — the earlier search silently lost it and had its year
+                // relabelled. One Wikimedia file can legitimately answer many
+                // searches, so ownership belongs in the key, not the payload.
                 return CarImage::updateOrCreate(
                     [
+                        'car_search_id' => $search->id,
+                        'year' => $year,
                         'provider' => $image['provider'],
                         'provider_image_id' => $image['provider_image_id'],
                     ],
                     [
-                        'car_search_id' => $search->id,
                         'make' => $search->make,
                         'model' => $search->model,
-                        'year' => $year,
                         'color' => $search->color,
                         'transparent_background' => $search->transparent_background,
                         'title' => $image['title'],

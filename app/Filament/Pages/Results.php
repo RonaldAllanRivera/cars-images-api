@@ -17,6 +17,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Livewire\Attributes\Url;
 use UnitEnum;
 
 class Results extends Page implements HasTable
@@ -33,6 +34,21 @@ class Results extends Page implements HasTable
 
     protected string $view = 'filament.pages.results';
 
+    /**
+     * Optional scope: show only the images of one search query.
+     *
+     * This must be component state, not `request()->query()`. Livewire's
+     * update requests carry no query string, so reading the request would
+     * drop the scope on the first pagination, sort, search, or bulk action —
+     * silently widening the table (and `DeleteBulkAction`'s select-all) to
+     * every csv-imported image in the database.
+     *
+     * `#[Url]` keeps it in the address bar so the link from Search Queries
+     * still works and the page stays shareable.
+     */
+    #[Url]
+    public ?string $searchId = null;
+
     public function table(Table $table): Table
     {
         return $table
@@ -41,9 +57,8 @@ class Results extends Page implements HasTable
                     ->whereHas('search', fn (Builder $q) => $q->whereNotNull('csv_import_id'))
                     ->with('search.csvImport');
 
-                $searchId = request()->query('searchId');
-                if ($searchId !== null && $searchId !== '') {
-                    $query->where('car_search_id', (int) $searchId);
+                if ($this->searchId !== null && $this->searchId !== '') {
+                    $query->where('car_search_id', (int) $this->searchId);
                 }
 
                 return $query;

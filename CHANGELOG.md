@@ -14,6 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add a CI pipeline (Pint, PHPUnit, `composer validate`, `composer check-platform-reqs`, `composer audit`).
 - Explore AI-assisted filtering for ambiguous results, replacing the current keyword heuristic (see `PLAN.md`).
 
+## [0.8.2] - 2026-08-24
+
+Three data-integrity defects found by running the application rather than by
+reading it. Each fix was written test-first, and each test was confirmed to
+fail against the old behaviour before the fix landed.
+
+### Fixed
+
+- **A failed refresh no longer destroys the images it was replacing.** `CarImageSearchService::refreshSearch()` deleted the search's images *outside* the transaction that `runSearch()` opens, so when Wikimedia answered 429 the rollback restored nothing: every reviewed image was gone permanently (`car_images` has no soft deletes), and because the `status = running` update rolled back too, the row still read `completed`. Both entry points were affected — the **Refresh from Wikimedia** action and `EditCarSearch::afterSave()`, which fires on every save whether or not filters changed. The delete and the refetch now share one transaction, and a failure forces the search to `failed` before re-throwing.
+
+- **The Results page no longer loses its scope after the first interaction.** `App\Filament\Pages\Results` resolved `searchId` with `request()->query()` inside the table query closure. Livewire's update requests carry no query string, so the scope vanished on the first paginate, sort, search, or bulk action and the table silently widened to every CSV-imported image in the database — including `DeleteBulkAction`, whose select-all plucks keys from the *filtered* query and therefore deleted unrelated imports. `searchId` is now a `#[Url]` component property, so it survives every round-trip and remains shareable in the address bar.
+
+- **One Wikimedia file can now belong to several searches without theft.** Images were upserted on `(provider, provider_image_id)` alone — a global key — with `car_search_id` and `year` in the *update* payload, so a file returned by two searches was **moved** rather than copied: the later search took the row and relabelled its year, and the earlier search was left empty while still reporting `completed`. Observed on real data: re-importing a CSV gave three new queries nine images while the total image count never changed, and the previous import's three queries dropped to zero. The same collapse happened *within* a multi-year search, because the year-relaxed fallback returns an identical result set for every year of a sparsely-catalogued model, leaving one row labelled with whichever year ran last.
+
+  Ownership is now part of the match key — `(car_search_id, year, provider, provider_image_id)` — and a new migration enforces it as a unique index. `updateOrCreate()` is a SELECT followed by an INSERT and is not atomic, so without the constraint two concurrent bulk-run queries could both miss a row and both insert it. Verified live: the scenario that previously moved 9 images now moves 0, and the image total grows instead of staying flat.
+
+### Added
+
+- `RefreshSearchTest`, `ResultsScopingTest`, `SharedImageOwnershipTest` — 10 tests covering the three defects above. The scoping tests deliberately pass `searchId` as component state rather than via `Livewire::withQueryParams()`, which pins the query string for a component's whole lifetime and is why the existing `ResultsPageTest` could not catch the bug.
+- Migration `add_unique_owner_index_to_car_images_table`, enforcing one file per (search, year) at the database level.
+
 ## [0.8.1] - 2026-08-24
 
 ### Added
