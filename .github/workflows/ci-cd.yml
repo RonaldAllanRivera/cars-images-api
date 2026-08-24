@@ -112,7 +112,32 @@ jobs:
           COMPOSER_BIN: ${{ vars.COMPOSER_BIN || 'composer' }}
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+          SSH_OPTS=(
+            -i ~/.ssh/deploy_key
+            -p "$SSH_PORT"
+            # Be explicit rather than relying on defaults: StrictHostKeyChecking
+            # defaults to "ask", and BatchMode stops any prompt hanging the job
+            # until the workflow times out.
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+            -o BatchMode=yes
+            -o ConnectTimeout=20
+          )
+
+          # Preflight: the deploy script needs bash (it uses `set -o pipefail`
+          # and a trap). Without this check a bash-less host fails with a bare
+          # `sh: bash: not found` and exit 127, which is a confusing way to
+          # learn that. Verified against a real sshd during development.
+          if ! ssh "${SSH_OPTS[@]}" "$SSH_USER@$SSH_HOST" 'command -v bash >/dev/null'; then
+            echo "::error::No bash on the remote host. The deploy script requires it."
+            exit 1
+          fi
+
+          # SC2029: the expansion below is deliberate. These three values must be
+          # interpolated on the runner so they arrive as literals in the remote
+          # command; the remote has no way to know them otherwise.
+          # shellcheck disable=SC2029
+          ssh "${SSH_OPTS[@]}" "$SSH_USER@$SSH_HOST" \
             "PHP_BIN='$PHP_BIN' COMPOSER_BIN='$COMPOSER_BIN' DEPLOY_PATH='$DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail
 

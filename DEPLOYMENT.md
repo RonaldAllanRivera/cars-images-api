@@ -475,8 +475,25 @@ means a hijacked DNS record cannot silently collect your deploy key.
   and are never touched.
 - A post-deploy request to `/admin/login` must return HTTP 200, so a deploy that
   leaves the site 500ing fails the run instead of reporting success.
+- The remote shell must have **bash** (SiteGround does). The workflow preflights
+  this and fails with a clear message, rather than the bare `sh: bash: not found`
+  / exit 127 you would otherwise get.
+- SSH runs with `StrictHostKeyChecking=yes`, `BatchMode=yes` and a connect
+  timeout, so an unknown host key or an unexpected prompt fails fast instead of
+  hanging the job until the workflow times out.
 - Attach a `production` GitHub Environment (*Settings → Environments*) if you
   want a manual approval gate before each deploy.
+
+**How this was verified.** The workflow was not written blind. `actionlint` and
+`shellcheck` both pass. The remote script was then executed end to end against a
+throwaway clone with its own SQLite database — a successful run returns exit 0
+and the deployed app answers `GET /admin/login` with HTTP 200. A deliberately
+broken migration was used to confirm the failure path: the run exits non-zero
+*and* the `trap` restores the site, so a bad deploy cannot strand the panel in
+maintenance mode. The SSH transport, key permissions, host-key pinning and
+environment passing were exercised against a real `sshd`, including a negative
+test confirming an unknown host key is rejected. What remains unverified is only
+SiteGround itself — the first real deploy is worth watching.
 
 To deploy, push to `main` — or run the workflow by hand from the **Actions** tab
 (`workflow_dispatch`).
