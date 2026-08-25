@@ -172,6 +172,27 @@ git clone https://github.com/RonaldAllanRivera/cars-images-api.git .
 
 ### 4.3. Configure the document root
 
+> **Security note if you cloned directly into `public_html`.** In that layout the
+> whole project — not just `public/` — sits inside the web root, so Apache serves
+> any file it can find before Laravel's rewrite ever runs. SiteGround's default
+> rules block the dangerous ones (verified on the live site: `.env`,
+> `.git/config`, `composer.lock`, `Dockerfile`, `docker-compose.yml` and
+> `storage/logs/laravel.log` all return **403**), but they do **not** block
+> everything: `composer.json`, `package.json`, `phpunit.xml` and `vite.config.js`
+> are all served with **200**.
+>
+> None of those contain secrets today, and the repository is public anyway, so
+> the practical risk is low — it mainly hands an attacker your exact dependency
+> versions to match against known CVEs. It is still the wrong shape, and it means
+> *any* file you add later is public by default unless a rule happens to catch it.
+> It is also why a test-only credential in `phpunit.xml` was a genuine problem
+> rather than a theoretical one: that file is world-readable in production.
+>
+> The durable fix is to make the document root `public/` rather than the project
+> root — Option A or Option B below. Then nothing outside `public/` is reachable
+> at all, regardless of which rules the host ships.
+
+
 #### Option A – Change docroot in SiteGround UI (preferred)
 
 1. In **Site Tools → Domains → Subdomains**, edit the `cars-search.artworkwebsite.com` subdomain.
@@ -446,9 +467,9 @@ SSHes into SiteGround and performs the sequence in §6.2 for you.
 | `SSH_HOST` | `giowg1234.siteground.biz` | SiteGround SSH hostname |
 | `SSH_PORT` | `18765` | SiteGround's non-standard SSH port |
 | `SSH_USER` | `u1234-abcdefg` | SiteGround SSH username |
-| `SSH_PRIVATE_KEY` | *(full PEM text)* | The **private** half of the key from §2.1, including the BEGIN/END lines |
+| `SSH_PRIVATE_KEY` | *(full PEM text)* | The **private** half of a key **with no passphrase** — see the warning below |
 | `SSH_KNOWN_HOSTS` | *(one line)* | Output of `ssh-keyscan -p 18765 YOUR_HOST` |
-| `DEPLOY_PATH` | `~/www/cars-search.artworkwebsite.com/cars-images-api` | Absolute path to the Laravel root on the server |
+| `DEPLOY_PATH` | `~/www/YOUR_DOMAIN/public_html` | The directory that **contains `artisan`** — see the note below |
 | `APP_URL` | `https://cars-search.artworkwebsite.com` | Optional; enables the post-deploy smoke check |
 
 And these as **Variables** (not secrets):
@@ -458,6 +479,36 @@ And these as **Variables** (not secrets):
 | `DEPLOY_ENABLED` | `true` | **The master switch.** Until it is `true`, the deploy job is skipped, so adding this workflow cannot fire a deploy before the secrets exist. |
 | `PHP_BIN` | `/usr/local/php83/bin/php` | Optional. Set it if SiteGround's default CLI `php` is not 8.3+ (see §4.4) |
 | `COMPOSER_BIN` | `composer` | Optional. Set it if Composer is not on `PATH`, e.g. `~/composer.phar` |
+
+> **Find your `DEPLOY_PATH` — do not assume it.** Two layouts are in use in
+> this guide: §4.2 recommends cloning into a `cars-images-api/` subdirectory,
+> while the "Alternative" clones **directly into `public_html`**. If you used the
+> alternative, the Laravel root *is* `public_html` and a path ending in
+> `/cars-images-api` does not exist. Confirm it on the server:
+>
+> ```bash
+> ssh siteground
+> cd ~/www/YOUR_DOMAIN/public_html   # or .../cars-images-api
+> ls artisan && pwd                  # the path printed here is DEPLOY_PATH
+> ```
+>
+> Both `~/...` and absolute paths work — the deploy script expands the tilde
+> itself, because the value is passed quoted and the remote shell would
+> otherwise treat `~` as a literal directory name. If the path is wrong, the
+> deploy aborts before touching anything and tells you no `artisan` was found.
+
+> **The CI key must have no passphrase.** GitHub Actions runs unattended and
+> cannot answer `Enter passphrase for key`. If your everyday key is
+> passphrase-protected (it should be), generate a *second*, dedicated key for
+> deployments and add its public half to SiteGround alongside the first:
+>
+> ```bash
+> ssh-keygen -t ed25519 -N "" -f ~/.ssh/siteground_deploy -C "github-actions"
+> ```
+>
+> Put the **private** half (`~/.ssh/siteground_deploy`) in `SSH_PRIVATE_KEY`, and
+> register the **public** half (`.pub`) in SiteGround → Devs → SSH Keys Manager.
+> Keeping it separate means you can revoke CI access without losing your own.
 
 **Why `SSH_KNOWN_HOSTS` rather than disabling host checking:** the workflow
 hands a private key to whatever answers on that hostname. Pinning the host key

@@ -141,7 +141,22 @@ jobs:
             "PHP_BIN='$PHP_BIN' COMPOSER_BIN='$COMPOSER_BIN' DEPLOY_PATH='$DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail
 
+          # DEPLOY_PATH arrives single-quoted, so the remote shell performs no
+          # tilde expansion: a value like ~/www/site/public_html would reach
+          # `cd` as a literal and abort the deploy. Expand it here so both
+          # absolute and ~-relative values work.
+          DEPLOY_PATH="${DEPLOY_PATH/#\~/$HOME}"
+
           cd "$DEPLOY_PATH"
+
+          # Fail loudly if DEPLOY_PATH is not actually a Laravel project root.
+          # Without this the deploy proceeds into `git reset --hard` on whatever
+          # directory it landed in, which is a bad way to discover a typo.
+          if [ ! -f artisan ]; then
+            echo "::error::No artisan found in $DEPLOY_PATH - is this the Laravel project root?"
+            exit 1
+          fi
+
           echo "==> Deploying $(pwd) as $(whoami)"
           "$PHP_BIN" -v | head -1
 
