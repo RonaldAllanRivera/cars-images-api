@@ -256,9 +256,26 @@ jobs:
             echo "APP_URL secret not set - skipping smoke check."
             exit 0
           fi
+          url="${APP_URL%/}/admin/login"
+
           # A deploy that leaves the panel 500ing should fail the run, not
-          # report success. /admin/login is the cheapest page that proves
-          # the framework booted and Filament's assets resolved.
-          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "${APP_URL%/}/admin/login")
-          echo "GET ${APP_URL%/}/admin/login -> $code"
-          [ "$code" = "200" ]
+          # report success. /admin/login is the cheapest page that proves the
+          # framework booted and Filament's assets resolved.
+          #
+          # Retry rather than probe once: this runs seconds after `artisan up`,
+          # while opcache is cold and the config cache has just been rebuilt,
+          # and shared hosting can briefly serve a stale 503 from its own cache.
+          # A single-shot check turns that blip into a red deploy - a false
+          # negative that teaches you to distrust the signal.
+          for attempt in 1 2 3 4 5 6; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$url" || echo 000)
+            echo "attempt ${attempt}/6: GET $url -> $code"
+            if [ "$code" = "200" ]; then
+              echo "Smoke check passed."
+              exit 0
+            fi
+            [ "$attempt" -lt 6 ] && sleep 10
+          done
+
+          echo "::error::Site never returned 200 (6 attempts over ~60s). The deploy landed, but the site is not healthy - check storage/logs/laravel.log."
+          exit 1

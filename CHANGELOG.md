@@ -32,7 +32,7 @@ the three data-integrity fixes — against a live database of 9,236 images.
   - A `concurrency` group, so two runs cannot interleave a `composer install` and a migration.
   - `git reset --hard origin/main` rather than `git pull`: this repository once tracked Filament's compiled assets, and a leftover local modification would turn a deploy into a merge conflict. Untracked files — `.env`, `.htaccess`, `storage/` — are not touched.
   - A preflight that aborts with an explicit message if `DEPLOY_PATH` contains no `artisan`, instead of running `git reset --hard` in whatever directory it landed in.
-  - An HTTP 200 smoke check on `/admin/login`, so a deploy that leaves the panel 500ing fails the run rather than reporting success.
+  - An HTTP 200 smoke check on `/admin/login`, so a deploy that leaves the panel 500ing fails the run rather than reporting success. It retries six times over ~60s: the check runs seconds after `artisan up`, while opcache is cold and the config cache has just been rebuilt, and shared hosting can briefly serve a stale 503. A single-shot probe turned that blip into a red run on an otherwise successful deploy — a false negative that teaches you to distrust the signal.
 
   - A `changes` job that diffs the push range and skips the deploy when only `*.md` or `docs/` were touched. Tests still run, so documentation is never merged blind, but production is not cycled through maintenance mode for a changelog entry. Manual runs, new branches and force-pushes deploy regardless — a missed deploy is a worse failure than a redundant one.
 
