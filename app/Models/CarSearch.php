@@ -14,6 +14,7 @@ class CarSearch extends Model
     protected $fillable = [
         'make',
         'model',
+        'commons_category',
         'from_year',
         'to_year',
         'color',
