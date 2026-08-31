@@ -11,83 +11,6 @@ use Illuminate\Support\Facades\Http;
 
 class WikimediaClient
 {
-    public function __construct(
-        protected ModelSearchTermNormalizer $modelNormalizer,
-    ) {}
-
-    /**
-     * One Commons search. Pass `$year = null` for the year-relaxed variant.
-     *
-     * This method deliberately does NOT retry without the year on an empty
-     * result. It used to, and that put the decision at the wrong layer: the
-     * client can only see whether the API answered, not whether the answer
-     * was usable. A query returning ten Honda Accords for an Acura looks
-     * non-empty here but is rejected wholesale downstream, so the year that
-     * needed the fallback most never got it. `CarImageSearchService` owns the
-     * retry now, because only it knows what survives filtering.
-     */
-    public function searchCars(
-        string $make,
-        ?string $model,
-        ?int $year,
-        ?string $color,
-        ?string $transmission,
-        bool $transparent,
-        int $limit = 10
-    ): Collection {
-        return $this->cachedSearch(
-            $this->buildQuery($make, $model, $year, $color, $transmission, $transparent),
-            $limit,
-        );
-    }
-
-    protected function cachedSearch(string $query, int $limit): Collection
-    {
-        $ttl = (int) config('images.wikimedia.cache_ttl', 3600);
-
-        return Cache::remember(
-            $this->cacheKey($query, $limit),
-            $ttl,
-            fn () => $this->searchImages($query, $limit),
-        );
-    }
-
-    protected function buildQuery(
-        string $make,
-        ?string $model,
-        ?int $year,
-        ?string $color,
-        ?string $transmission,
-        bool $transparent
-    ): string {
-        $terms = [$make];
-
-        if ($model !== null && $model !== '') {
-            $normalizedModel = $this->modelNormalizer->normalize($model);
-            $terms[] = $normalizedModel !== '' ? $normalizedModel : $model;
-        }
-
-        if ($year !== null) {
-            $terms[] = (string) $year;
-        }
-
-        $terms[] = 'car';
-
-        if ($color !== null && $color !== '') {
-            $terms[] = $color;
-        }
-
-        if ($transmission !== null && $transmission !== '') {
-            $terms[] = $transmission;
-        }
-
-        if ($transparent) {
-            $terms[] = 'transparent background';
-        }
-
-        return implode(' ', $terms);
-    }
-
     /**
      * One Commons API call, with the shared retry policy, block detection and
      * etiquette headers.
@@ -233,40 +156,6 @@ class WikimediaClient
         return $files->take($max)->values();
     }
 
-    protected function searchImages(string $query, int $limit): Collection
-    {
-        $data = $this->request([
-            'prop' => 'imageinfo',
-            'generator' => 'search',
-            'gsrsearch' => $query,
-            'gsrnamespace' => 6,
-            'gsrlimit' => $limit,
-            'iiprop' => 'url|size|mime|extmetadata',
-            'iiurlwidth' => 1200,
-        ]);
-
-        $pages = Arr::get($data, 'query.pages', []);
-
-        return collect($pages)
-            ->map(function (array $page) {
-                return $this->mapPageToImage($page);
-            })
-            ->filter(function (array $image) {
-                if ($image['source_url'] === null) {
-                    return false;
-                }
-
-                // Namespace 6 (File:) includes PDFs, DjVu and other documents.
-                // Keep only actual raster/vector images.
-                if (! str_starts_with((string) ($image['mime'] ?? ''), 'image/')) {
-                    return false;
-                }
-
-                return $this->isCarImage($image);
-            })
-            ->values();
-    }
-
     protected function mapPageToImage(array $page): array
     {
         $imageInfo = $page['imageinfo'][0] ?? null;
@@ -326,68 +215,5 @@ class WikimediaClient
         $value = trim((string) $ext[$key]['value']);
 
         return $value !== '' ? $value : null;
-    }
-
-    protected function cacheKey(string $query, int $limit): string
-    {
-        return 'wikimedia_cars_'.md5($query.'|'.$limit);
-    }
-
-    public function clearSearchCache(
-        string $make,
-        ?string $model,
-        int $year,
-        ?string $color,
-        ?string $transmission,
-        bool $transparent,
-        int $limit = 10
-    ): void {
-        // searchCars() may have cached either the year-specific query or the
-        // year-relaxed fallback query — forget both.
-        foreach ([$year, null] as $queryYear) {
-            $query = $this->buildQuery($make, $model, $queryYear, $color, $transmission, $transparent);
-            Cache::forget($this->cacheKey($query, $limit));
-        }
-    }
-
-    protected function isCarImage(array $image): bool
-    {
-        $title = strtolower((string) ($image['title'] ?? ''));
-        $description = strtolower(strip_tags((string) ($image['description'] ?? '')));
-
-        $metadata = $image['metadata'] ?? [];
-        $extmetadata = $metadata['imageinfo'][0]['extmetadata'] ?? [];
-        $categories = strtolower((string) ($extmetadata['Categories']['value'] ?? ''));
-
-        // Quick negative filter: exclude obvious non-car subjects like flowers and plants.
-        foreach ([
-            'flower',
-            'flowers',
-            'blossom',
-            'plant',
-            'tree',
-            'garden',
-            'psychology',
-            'neuroscience',
-            'cognitive',
-            'royal society',
-            'open science',
-            'journal',
-            'article',
-        ] as $negative) {
-            if (str_contains($title, $negative) || str_contains($description, $negative) || str_contains($categories, $negative)) {
-                return false;
-            }
-        }
-
-        // Positive hints that this is a car / vehicle.
-        foreach (['car', 'cars', 'automobile', 'automobiles', 'vehicle', 'vehicles', 'sedan', 'hatchback', 'suv', 'pickup', 'coupe', 'wagon', 'convertible'] as $positive) {
-            if (str_contains($title, $positive) || str_contains($description, $positive) || str_contains($categories, $positive)) {
-                return true;
-            }
-        }
-
-        // If we can't tell, keep the image to avoid losing valid results.
-        return true;
     }
 }

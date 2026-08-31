@@ -19,7 +19,7 @@ class WikimediaBlockHandlingTest extends TestCase
         $client = app(WikimediaClient::class);
 
         try {
-            $client->searchCars('Toyota', 'RAV4', 1997, null, null, false, 5);
+            $client->filesInCategory('Toyota RAV4');
             $this->fail('Expected WikimediaBlockedException');
         } catch (WikimediaBlockedException $e) {
             $this->assertSame(429, $e->statusCode);
@@ -39,7 +39,7 @@ class WikimediaBlockHandlingTest extends TestCase
 
         $this->expectException(WikimediaBlockedException::class);
 
-        $client->searchCars('Toyota', 'RAV4', 1997, null, null, false, 5);
+        $client->filesInCategory('Toyota RAV4');
     }
 
     public function test_user_agent_includes_contact_info(): void
@@ -51,7 +51,7 @@ class WikimediaBlockHandlingTest extends TestCase
         /** @var WikimediaClient $client */
         $client = app(WikimediaClient::class);
 
-        $client->searchCars('Toyota', 'RAV4', 1997, null, null, false, 5);
+        $client->filesInCategory('Toyota RAV4');
 
         Http::assertSent(function ($request) {
             $ua = $request->header('User-Agent')[0] ?? '';
@@ -70,7 +70,7 @@ class WikimediaBlockHandlingTest extends TestCase
         /** @var WikimediaClient $client */
         $client = app(WikimediaClient::class);
 
-        $client->searchCars('Toyota', 'RAV4', 1997, null, null, false, 5);
+        $client->filesInCategory('Toyota RAV4');
 
         Http::assertSent(function ($request) {
             return ($request->data()['maxlag'] ?? null) == 5

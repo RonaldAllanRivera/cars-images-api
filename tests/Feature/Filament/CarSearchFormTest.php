@@ -171,8 +171,9 @@ class CarSearchFormTest extends TestCase
         // $normalize closure that masks the loss of these callbacks, so a
         // create-only test passes even with all three of them deleted.
         // Without this test, removing them persists the literal string
-        // "__all__", which WikimediaClient::buildQuery() then appends as a
-        // search term — every subsequent query returns nothing.
+        // "__all__" as a real colour or transmission, which then travels into
+        // the CSV manifest and the download filenames as if a user had chosen
+        // it.
         $user = User::factory()->create();
 
         $search = CarSearch::create([

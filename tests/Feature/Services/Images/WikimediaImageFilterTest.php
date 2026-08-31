@@ -35,8 +35,8 @@ class WikimediaImageFilterTest extends TestCase
                         ],
                         [
                             'pageid' => 2,
-                            // Title contains "vehicles" so isCarImage() would keep it —
-                            // the MIME filter must drop it first.
+                            // Commons categories hold documents as well as
+                            // photographs; the MIME filter must drop this.
                             'title' => 'File:Trade-in-vehicles.pdf',
                             'imageinfo' => [[
                                 'url' => 'https://example.com/doc.pdf',
@@ -52,7 +52,7 @@ class WikimediaImageFilterTest extends TestCase
             ], 200),
         ]);
 
-        $results = app(WikimediaClient::class)->searchCars('Toyota', 'Camry', 2020, null, null, false, 10);
+        $results = app(WikimediaClient::class)->filesInCategory('Toyota Camry');
 
         $this->assertCount(1, $results);
         $this->assertSame('https://example.com/camry.jpg', $results->first()['source_url']);
