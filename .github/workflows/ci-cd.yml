@@ -67,18 +67,71 @@ jobs:
       - name: Audit dependencies for known vulnerabilities
         run: composer audit
 
+  changes:
+    name: Detect deployable changes
+    runs-on: ubuntu-latest
+    outputs:
+      deployable: ${{ steps.filter.outputs.deployable }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need history to diff the push range.
+          fetch-depth: 0
+
+      - id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          # A manual run is deliberate: deploy whatever the paths say.
+          if [ "$EVENT_NAME" != "push" ]; then
+            echo "Not a push event - treating as deployable."
+            echo "deployable=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # A new branch or a force-push reports an all-zero (or unreachable)
+          # base SHA. Deploy rather than silently skip: a missed deploy is a
+          # worse failure than a redundant one.
+          if [ -z "${BEFORE:-}" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            echo "No usable base commit - treating as deployable."
+            echo "deployable=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed="$(git diff --name-only "$BEFORE" "$SHA")"
+          echo "Changed files:"
+          echo "$changed"
+
+          # Deployable if ANY changed path is not documentation. grep -v exits 0
+          # when at least one line fails to match the docs pattern.
+          if printf '%s\n' "$changed" | grep -qvE '\.md$|^docs/'; then
+            echo "deployable=true" >> "$GITHUB_OUTPUT"
+            echo "-> code changed; the deploy will run."
+          else
+            echo "deployable=false" >> "$GITHUB_OUTPUT"
+            echo "-> documentation only; tests run, deploy is skipped."
+          fi
+
   deploy:
     name: Deploy to SiteGround
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, changes]
 
-    # Deploys only from main, never from a pull request, and only once the
-    # repository variable DEPLOY_ENABLED is set to 'true'. That switch means
-    # merging this workflow cannot fire a deploy before the secrets exist.
+    # Deploys only from main, never from a pull request, only once the
+    # repository variable DEPLOY_ENABLED is 'true', and only when the push
+    # actually touched something other than documentation. There is no reason
+    # to cycle production through maintenance mode for a changelog entry.
     if: >-
       github.ref == 'refs/heads/main' &&
       github.event_name != 'pull_request' &&
-      vars.DEPLOY_ENABLED == 'true'
+      vars.DEPLOY_ENABLED == 'true' &&
+      needs.changes.outputs.deployable == 'true'
 
     # Attach a GitHub Environment so you can require a manual approval or
     # restrict which branches may deploy: Settings -> Environments -> production.

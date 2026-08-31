@@ -517,6 +517,7 @@ means a hijacked DNS record cannot silently collect your deploy key.
 **Safety properties worth knowing:**
 
 - The deploy job has `needs: test`, so a red suite blocks the deploy.
+- A documentation-only push (`*.md`, `docs/`) runs the tests but **skips the deploy** — there is no reason to take the site down to publish a changelog entry. Manual runs from the Actions tab always deploy, whatever the paths.
 - `concurrency` prevents two deploys overlapping mid-`composer install`.
 - The site is put in maintenance mode, and a `trap ... EXIT` brings it back up
   **even if a migration fails** — a failed deploy must not leave the panel dark.

@@ -7,15 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **`.github/workflows/ci-cd.yml`** — tests on every push and pull request (Pint, PHPUnit, `composer validate --strict`, `check-platform-reqs`, `composer audit`), and an automated SiteGround deploy gated on a green suite. The deploy puts the site in maintenance mode with a `trap ... EXIT` that restores it even if a migration fails, pins the SSH host key rather than disabling host verification, serialises runs with `concurrency`, and finishes with an HTTP 200 smoke check on `/admin/login` so a deploy that breaks the panel fails the run. It stays dormant until the repository variable `DEPLOY_ENABLED` is set to `true`. Setup and required secrets are documented in `DEPLOYMENT.md` §6.1.
-
 ### Planned
 
 - Move bulk search and bulk download onto a real queue worker so long runs are not bound by the web request timeout (the `RunCarSearchJob`, `FetchWikimediaCarImagesForYearJob`, and `DownloadCarImagesJob` classes exist as scaffolding but are not dispatched yet).
 - Persist downloaded images to the `cars` storage disk instead of streaming them straight to the browser.
 - Explore AI-assisted filtering for ambiguous results, replacing the current keyword heuristic (see `PLAN.md`).
+
+## [0.9.0] - 2026-08-31
+
+Continuous deployment. Pushing to `main` now runs the suite and, if it is green,
+deploys to SiteGround without an SSH session. The first automated run promoted
+production from `e953af8` to `5c0a6a4` — the Laravel 13 / Filament 5 upgrade and
+the three data-integrity fixes — against a live database of 9,236 images.
+
+### Added
+
+- **`.github/workflows/ci-cd.yml`** — a `test` job on every push and pull request (`composer validate --strict`, `check-platform-reqs`, Pint, PHPUnit, `composer audit`), and a `deploy` job with `needs: test`, so a red suite blocks the deploy. The deploy runs only from `main`, never on a pull request, and only when the repository variable `DEPLOY_ENABLED` is `true` — a switch that let the workflow be merged and exercised before any credentials existed.
+
+  Deploy safety, each property verified rather than assumed:
+
+  - Maintenance mode with a `trap ... EXIT` that restores the site **even when a step fails**. Proven with a deliberately broken migration: the run exits non-zero *and* the site comes back up.
+  - `StrictHostKeyChecking=yes` against a pinned `SSH_KNOWN_HOSTS`, rather than disabling host verification — the job hands a private key to whatever answers that hostname. A negative test confirmed an unknown host key is rejected.
+  - `BatchMode=yes` and `ConnectTimeout`, so a missing key fails fast instead of hanging on a prompt until the workflow times out.
+  - A `concurrency` group, so two runs cannot interleave a `composer install` and a migration.
+  - `git reset --hard origin/main` rather than `git pull`: this repository once tracked Filament's compiled assets, and a leftover local modification would turn a deploy into a merge conflict. Untracked files — `.env`, `.htaccess`, `storage/` — are not touched.
+  - A preflight that aborts with an explicit message if `DEPLOY_PATH` contains no `artisan`, instead of running `git reset --hard` in whatever directory it landed in.
+  - An HTTP 200 smoke check on `/admin/login`, so a deploy that leaves the panel 500ing fails the run rather than reporting success.
+
+  - A `changes` job that diffs the push range and skips the deploy when only `*.md` or `docs/` were touched. Tests still run, so documentation is never merged blind, but production is not cycled through maintenance mode for a changelog entry. Manual runs, new branches and force-pushes deploy regardless — a missed deploy is a worse failure than a redundant one.
+
+  Setup and the required secrets are documented in `DEPLOYMENT.md` §6.1.
+
+### Fixed
+
+- **The test suite no longer ships a credential.** GitGuardian flagged a literal Laravel `APP_KEY` committed in `phpunit.xml`. The value was a throwaway generated for the suite — not the application's key, confirmed by comparing it against the real `.env` — so nothing was compromised. It was still the wrong thing to commit: a credential-shaped string in a repository teaches people to wave away scanner alerts, and this project serves its own root as the web root, so `phpunit.xml` is world-readable in production. `tests/bootstrap.php` now mints an ephemeral key per run and exports it to every adapter Laravel's `Env` repository reads. Nothing key-shaped is committed, CI needs no secret, and a fresh clone still runs the suite with no setup.
+
+- **`DEPLOY_PATH` handling.** A tilde never expanded: the value is passed single-quoted, so the remote shell treated `~/www/...` as a literal directory and `cd` failed. Every path example in the deployment guide used `~`. The remote script now expands it, so both absolute and `~`-relative values work. The guide also documented the wrong path for this deployment — the project was cloned directly into `public_html`, so `public_html` *is* the Laravel root — and now describes `DEPLOY_PATH` as "the directory containing `artisan`", with a command to confirm it on the server rather than assume it.
+
+### Changed
+
+- `DEPLOYMENT.md` restructured: §6.1 covers the automated deploy, §6.2 keeps the manual SSH sequence as the fallback. Added a warning that the CI key must have no passphrase — GitHub Actions cannot answer a prompt — and a security note, checked against the live site, that serving the project root as the web root leaves `composer.json`, `package.json`, `phpunit.xml` and `vite.config.js` publicly readable even though SiteGround blocks `.env`, `.git` and the Laravel log.
 
 ## [0.8.2] - 2026-08-24
 

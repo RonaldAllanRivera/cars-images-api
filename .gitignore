@@ -41,3 +41,6 @@ pnpm-debug.log
 /public/css/filament
 /public/js/filament
 /public/fonts/filament
+
+# Local-only scratch for deployment credentials — never commit
+*.local.txt

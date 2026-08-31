@@ -6,6 +6,7 @@ A Laravel 13 + Filament 5 application that searches, filters, reviews, and bulk-
 ![Laravel](https://img.shields.io/badge/Laravel-13.x-FF2D20?logo=laravel&logoColor=white)
 ![Filament](https://img.shields.io/badge/Filament-5.x-FDAE4B)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
+[![CI / Deploy](https://github.com/RonaldAllanRivera/cars-images-api/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/RonaldAllanRivera/cars-images-api/actions/workflows/ci-cd.yml)
 ![Tests](https://img.shields.io/badge/tests-124-informational)
 
 ---
@@ -302,9 +303,23 @@ Code style is enforced with Pint:
 
 ## Deployment
 
-Pushing to `main` runs the test suite and, once enabled, deploys to SiteGround automatically via [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) — gated on a green suite, with maintenance mode, host-key pinning, and a post-deploy smoke check.
+**Deployment is continuous.** Pushing to `main` runs the suite and, if it is green, deploys to SiteGround over SSH via [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml) — no manual session required. The deploy job has `needs: test`, so a red suite never reaches production.
 
-`DEPLOYMENT.md` covers deployment to SiteGround shared hosting in detail: directory layout, serving Laravel from `public/`, the `.htaccess` rewrite that keeps `/livewire/livewire.js` reachable, environment configuration, and troubleshooting. The Docker stack above deliberately mirrors that environment.
+The interesting part is the failure behaviour rather than the happy path:
+
+| Guard | What it prevents |
+| --- | --- |
+| `trap ... EXIT` around maintenance mode | a failed migration leaving the panel offline |
+| Pinned `SSH_KNOWN_HOSTS` + `StrictHostKeyChecking=yes` | handing the deploy key to a hijacked hostname |
+| `BatchMode` + `ConnectTimeout` | a credential prompt hanging the job until it times out |
+| `concurrency` group | two deploys interleaving a `composer install` and a migration |
+| `artisan` preflight on `DEPLOY_PATH` | `git reset --hard` running in the wrong directory |
+| HTTP 200 smoke check on `/admin/login` | a deploy that 500s the site reporting success |
+| Docs-only path filter | taking production offline to publish a changelog entry |
+
+Each was verified by execution, not by reading: the script was run end-to-end against a throwaway clone, and the trap was proven with a deliberately broken migration — the run exits non-zero *and* the site comes back up.
+
+`DEPLOYMENT.md` covers the rest: §6.1 the automated deploy and its secrets, §6.2 the manual SSH sequence as fallback, plus directory layout, serving Laravel from `public/`, the `.htaccess` rewrite that keeps Livewire's endpoint reachable, and troubleshooting. The Docker stack above deliberately mirrors that environment.
 
 ---
 
