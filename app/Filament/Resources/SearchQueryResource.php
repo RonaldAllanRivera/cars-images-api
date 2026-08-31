@@ -51,6 +51,11 @@ class SearchQueryResource extends Resource
                 Tables\Columns\TextColumn::make('from_year')->label('Year')->sortable(),
                 Tables\Columns\TextColumn::make('make')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('model')->searchable(),
+                Tables\Columns\TextColumn::make('commons_category')
+                    ->label('Commons category')
+                    ->placeholder('none found')
+                    ->toggleable()
+                    ->tooltip('The Commons category this search read. Empty means no category could be resolved from the model string. Set, with zero images, means the category holds no photograph naming that year.'),
                 Tables\Columns\TextColumn::make('csvImport.original_filename')->label('Source CSV')->limit(30),
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
