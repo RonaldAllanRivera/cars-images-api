@@ -3,7 +3,6 @@
 namespace App\Services\Images;
 
 use App\Models\CarImage;
-use App\Models\CarMake;
 use App\Models\CarSearch;
 use App\Models\User;
 use Illuminate\Database\DatabaseManager;
@@ -12,21 +11,11 @@ use Throwable;
 
 class CarImageSearchService
 {
-    /**
-     * Used only when the `car_makes` catalogue is empty.
-     *
-     * @var array<int, string>
-     */
-    private const FALLBACK_MAKES = [
-        'Acura', 'Audi', 'BMW', 'Chevrolet', 'Chrysler', 'Dodge', 'Ford', 'Honda',
-        'Hyundai', 'Infiniti', 'Jaguar', 'Jeep', 'Kia', 'Lexus', 'Mazda',
-        'Mercedes-Benz', 'Mitsubishi', 'Nissan', 'Peugeot', 'Porsche', 'Renault',
-        'Subaru', 'Suzuki', 'Tesla', 'Toyota', 'Volkswagen', 'Volvo',
-    ];
-
     public function __construct(
         protected WikimediaClient $wikimedia,
         protected DatabaseManager $db,
+        protected CommonsCategoryLocator $locator,
+        protected ModelYearMatcher $yearMatcher = new ModelYearMatcher,
         protected MakeRelevanceChecker $makeChecker = new MakeRelevanceChecker,
     ) {}
 
@@ -85,6 +74,12 @@ class CarImageSearchService
 
     public function runSearch(CarSearch $search): Collection
     {
+        // Resolve before opening the transaction. The lookup row is cache
+        // state, not search state: if the search fails later in this run the
+        // resolution must survive rather than roll back with it, or the next
+        // attempt pays for the same probes again.
+        $this->locator->locate($search->make, $search->model);
+
         return $this->db->transaction(fn () => $this->executeSearch($search));
     }
 
@@ -103,21 +98,22 @@ class CarImageSearchService
      */
     public function refreshSearch(CarSearch $search): Collection
     {
-        // Cache eviction is not database state, so it stays outside the
-        // transaction — re-fetching is harmless if the refresh then fails.
-        foreach (range($search->from_year, $search->to_year) as $year) {
-            $this->wikimedia->clearSearchCache(
-                $search->make,
-                $search->model,
-                $year,
-                $search->color,
-                $this->transmissionForQuery($search),
-                $search->transparent_background,
-                $search->images_per_year,
-            );
-        }
-
         try {
+            // Resolution and cache eviction sit outside the transaction below
+            // but inside this try. Outside the transaction because a lookup row
+            // is cache state that must survive a failed refresh; inside the try
+            // because resolving talks to Wikimedia, so a 429 here has to mark
+            // the search failed like any other block rather than escape and
+            // leave it reading `completed`.
+            //
+            // One category serves every year of the range, so there is a single
+            // entry to forget rather than one per year.
+            $category = $this->locator->locate($search->make, $search->model);
+
+            if ($category !== null) {
+                $this->wikimedia->forgetCategory($category);
+            }
+
             return $this->db->transaction(function () use ($search) {
                 CarImage::where('car_search_id', $search->id)->delete();
 
@@ -137,7 +133,14 @@ class CarImageSearchService
     {
         $results = collect();
 
-        $search->update(['status' => 'running']);
+        $search->update([
+            'status' => 'running',
+            // Recorded so an empty result can be told apart: null means no
+            // category could be resolved from the model string, while a set
+            // value with no images means the category holds no photograph
+            // naming that year.
+            'commons_category' => $this->locator->locate($search->make, $search->model),
+        ]);
 
         foreach (range($search->from_year, $search->to_year) as $year) {
             $results = $results->merge(
@@ -163,32 +166,24 @@ class CarImageSearchService
 
     public function fetchAndStoreForYear(CarSearch $search, int $year, int $limit): Collection
     {
-        $images = $this->relevantImages($search, $year, $limit);
-        $yearConfirmed = true;
+        $category = $this->locator->locate($search->make, $search->model);
 
-        // Recall fallback: a hard year term over-constrains Wikimedia full-text
-        // search for sparsely photographed models ("Acura CL 1998 car" returns
-        // nothing usable, "Acura CL car" returns ten). Retry once without it.
-        //
-        // The test is on *relevant* images, not on the raw response. It used
-        // to live in WikimediaClient, where only the raw response is visible,
-        // and so missed the case it was written for: "Acura CL 1997 car"
-        // answers with ten Honda Accords, which reads as a healthy result but
-        // is rejected in full by relevantImages(), leaving the year empty with
-        // no retry. Filter first, then decide.
-        if ($images->isEmpty()) {
-            $images = $this->relevantImages($search, null, $limit);
-
-            // These images matched a query with no year in it, so the year
-            // stored below is the loop counter, not a property of the photo.
-            // The same year-less query serves every year in the range, so
-            // adjacent years legitimately draw the same file — flag it rather
-            // than presenting one photo as several distinct model years.
-            $yearConfirmed = false;
+        if ($category === null) {
+            return collect();
         }
 
-        return $images
-            ->map(function (array $image) use ($search, $year, $yearConfirmed) {
+        // The whole category, then the year filter, then the limit — in that
+        // order. Applying the limit to the fetch would hand the year filter an
+        // arbitrary slice: Category:Cadillac STS holds 56 files of which 6
+        // name 2005, so a ten-file fetch finds none of them.
+        return $this->wikimedia->filesInCategory($category)
+            ->filter(fn (array $image) => $this->yearMatcher->modelYear(
+                (string) ($image['title'] ?? ''),
+                $search->make,
+            ) === $year)
+            ->take($limit)
+            ->values()
+            ->map(function (array $image) use ($search, $year) {
                 $categories = $this->categoriesOf($image);
 
                 // The match key includes the owning search AND the year.
@@ -223,7 +218,9 @@ class CarImageSearchService
                             $image['description'],
                             $categories,
                         ),
-                        'year_confirmed' => $yearConfirmed,
+                        // Exact-year by construction: the file's own title
+                        // names this year, or it was not selected.
+                        'year_confirmed' => true,
                         'download_status' => 'not_downloaded',
                         'download_path' => null,
                         'metadata' => $image['metadata'],
@@ -233,79 +230,10 @@ class CarImageSearchService
     }
 
     /**
-     * One Commons search, with photographs of other manufacturers removed.
-     *
-     * Wikimedia's full-text search is loose: an "Acura CL" query matches the
-     * Honda Accord chassis code "CL3", so an Acura search came back full of
-     * Hondas. Flagging them was not enough — see MakeRelevanceChecker.
-     *
-     * @param  int|null  $year  null runs the year-relaxed variant of the query
-     * @return Collection<int, array<string, mixed>>
-     */
-    private function relevantImages(CarSearch $search, ?int $year, int $limit): Collection
-    {
-        $images = $this->wikimedia->searchCars(
-            $search->make,
-            $search->model,
-            $year,
-            $search->color,
-            $this->transmissionForQuery($search),
-            $search->transparent_background,
-            $limit
-        );
-
-        $knownMakes = $this->knownMakes();
-
-        return $images
-            ->reject(fn (array $image) => $this->makeChecker->isOffMake(
-                $search->make,
-                $image['title'] ?? null,
-                $image['description'] ?? null,
-                $this->categoriesOf($image),
-                $knownMakes,
-            ))
-            ->values();
-    }
-
-    /**
-     * Transmission value to feed into the Wikimedia query.
-     *
-     * CSV-imported searches keep `transmission` only as informational
-     * metadata for the manifest export — including it in the image query
-     * over-constrains it and returns zero results (image pages never
-     * mention "Automatic 4-spd"). Ad-hoc searches keep their behaviour.
-     */
-    private function transmissionForQuery(CarSearch $search): ?string
-    {
-        return $search->csv_import_id !== null ? null : $search->transmission;
-    }
-
-    /**
      * Categories string Wikimedia attaches to an image page, if any.
      */
     private function categoriesOf(array $image): ?string
     {
         return $image['metadata']['imageinfo'][0]['extmetadata']['Categories']['value'] ?? null;
-    }
-
-    /**
-     * Manufacturer names used to detect that an image is of another car.
-     *
-     * Sourced from the curated `car_makes` catalogue so the filter improves
-     * as the catalogue grows. The fallback keeps the filter working on a
-     * fresh install where the catalogue has not been seeded yet — without it
-     * an unseeded database would silently disable off-make rejection.
-     *
-     * @return array<int, string>
-     */
-    private function knownMakes(): array
-    {
-        $catalogue = CarMake::query()->pluck('name')->all();
-
-        if ($catalogue !== []) {
-            return $catalogue;
-        }
-
-        return self::FALLBACK_MAKES;
     }
 }

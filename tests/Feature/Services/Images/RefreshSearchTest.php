@@ -114,25 +114,33 @@ class RefreshSearchTest extends TestCase
     {
         $search = $this->searchWithImages(3);
 
-        Http::fake(['*' => Http::response(['query' => ['pages' => [[
-            'pageid' => 999,
-            'title' => 'File:Toyota RAV4 fresh.jpg',
-            'imageinfo' => [[
-                'url' => 'https://example.com/fresh.jpg',
-                'thumburl' => 'https://example.com/fresh-thumb.jpg',
-                'width' => 800,
-                'height' => 600,
-                'mime' => 'image/jpeg',
-                'extmetadata' => ['Categories' => ['value' => 'Toyota RAV4']],
-            ]],
-        ]]]], 200)]);
+        Http::fake(function ($request) {
+            if (isset($request->data()['titles'])) {
+                return Http::response(['query' => ['pages' => [
+                    ['title' => $request->data()['titles'], 'pageid' => 1],
+                ]]], 200);
+            }
+
+            return Http::response(['query' => ['pages' => [[
+                'pageid' => 999,
+                'title' => 'File:2020 Toyota RAV4 fresh.jpg',
+                'imageinfo' => [[
+                    'url' => 'https://example.com/fresh.jpg',
+                    'thumburl' => 'https://example.com/fresh-thumb.jpg',
+                    'width' => 800,
+                    'height' => 600,
+                    'mime' => 'image/jpeg',
+                    'extmetadata' => ['Categories' => ['value' => 'Toyota RAV4']],
+                ]],
+            ]]]], 200);
+        });
 
         app(CarImageSearchService::class)->refreshSearch($search);
 
         $images = CarImage::where('car_search_id', $search->id)->get();
 
         $this->assertCount(1, $images, 'A successful refresh replaces the old set.');
-        $this->assertSame('File:Toyota RAV4 fresh.jpg', $images->first()->title);
+        $this->assertSame('File:2020 Toyota RAV4 fresh.jpg', $images->first()->title);
         $this->assertSame('completed', $search->fresh()->status);
     }
 }

@@ -18,8 +18,16 @@ class CommonsCategoryLocator
      * cached in the database rather than only for the request: the source CSV
      * holds 5,136 distinct models, and every year of each one asks again.
      */
-    public function locate(string $make, string $model): ?string
+    public function locate(string $make, ?string $model): ?string
     {
+        // An ad-hoc search may leave the model blank ("all models"). There is
+        // no category for that: Category:Acura is the whole marque, and
+        // attaching every Acura ever photographed to a search for one model
+        // year is exactly what CommonsCategoryResolver refuses to do.
+        if ($model === null || trim($model) === '') {
+            return null;
+        }
+
         $lookup = CommonsCategoryLookup::query()
             ->where('make', $make)
             ->where('model', $model)

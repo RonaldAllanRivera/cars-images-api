@@ -85,6 +85,18 @@ class CommonsCategoryLocatorTest extends TestCase
         $this->assertSame('Acura CL', app(CommonsCategoryLocator::class)->locate('Acura', '2.3CL/3.0CL'));
     }
 
+    public function test_a_search_with_no_model_resolves_nothing(): void
+    {
+        // Category:Acura is the whole marque. A make-only search has no
+        // category narrow enough to be meaningful, so it resolves to null
+        // and stores nothing rather than attaching arbitrary Acuras.
+        $this->fakeExistingCategories(['Acura']);
+
+        $this->assertNull(app(CommonsCategoryLocator::class)->locate('Acura', null));
+        $this->assertNull(app(CommonsCategoryLocator::class)->locate('Acura', '  '));
+        Http::assertNothingSent();
+    }
+
     public function test_a_resolved_category_never_expires(): void
     {
         // A category that exists does not stop existing, so an old hit is
