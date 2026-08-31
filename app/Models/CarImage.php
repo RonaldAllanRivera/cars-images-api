@@ -28,6 +28,7 @@ class CarImage extends Model
         'license',
         'attribution',
         'make_confirmed',
+        'year_confirmed',
         'download_status',
         'download_path',
         'metadata',
@@ -41,6 +42,7 @@ class CarImage extends Model
             'width' => 'integer',
             'height' => 'integer',
             'make_confirmed' => 'boolean',
+            'year_confirmed' => 'boolean',
             'metadata' => 'array',
         ];
     }

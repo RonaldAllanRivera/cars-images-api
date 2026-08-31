@@ -163,32 +163,32 @@ class CarImageSearchService
 
     public function fetchAndStoreForYear(CarSearch $search, int $year, int $limit): Collection
     {
-        $images = $this->wikimedia->searchCars(
-            $search->make,
-            $search->model,
-            $year,
-            $search->color,
-            $this->transmissionForQuery($search),
-            $search->transparent_background,
-            $limit
-        );
+        $images = $this->relevantImages($search, $year, $limit);
+        $yearConfirmed = true;
 
-        $knownMakes = $this->knownMakes();
+        // Recall fallback: a hard year term over-constrains Wikimedia full-text
+        // search for sparsely photographed models ("Acura CL 1998 car" returns
+        // nothing usable, "Acura CL car" returns ten). Retry once without it.
+        //
+        // The test is on *relevant* images, not on the raw response. It used
+        // to live in WikimediaClient, where only the raw response is visible,
+        // and so missed the case it was written for: "Acura CL 1997 car"
+        // answers with ten Honda Accords, which reads as a healthy result but
+        // is rejected in full by relevantImages(), leaving the year empty with
+        // no retry. Filter first, then decide.
+        if ($images->isEmpty()) {
+            $images = $this->relevantImages($search, null, $limit);
+
+            // These images matched a query with no year in it, so the year
+            // stored below is the loop counter, not a property of the photo.
+            // The same year-less query serves every year in the range, so
+            // adjacent years legitimately draw the same file — flag it rather
+            // than presenting one photo as several distinct model years.
+            $yearConfirmed = false;
+        }
 
         return $images
-            // Drop photographs that plainly belong to a different manufacturer.
-            // Wikimedia's full-text search is loose: an "Acura CL" query matches
-            // the Honda Accord chassis code "CL3", so an Acura search came back
-            // full of Hondas. Flagging them was not enough — see MakeRelevanceChecker.
-            ->reject(fn (array $image) => $this->makeChecker->isOffMake(
-                $search->make,
-                $image['title'] ?? null,
-                $image['description'] ?? null,
-                $this->categoriesOf($image),
-                $knownMakes,
-            ))
-            ->values()
-            ->map(function (array $image) use ($search, $year) {
+            ->map(function (array $image) use ($search, $year, $yearConfirmed) {
                 $categories = $this->categoriesOf($image);
 
                 // The match key includes the owning search AND the year.
@@ -223,12 +223,48 @@ class CarImageSearchService
                             $image['description'],
                             $categories,
                         ),
+                        'year_confirmed' => $yearConfirmed,
                         'download_status' => 'not_downloaded',
                         'download_path' => null,
                         'metadata' => $image['metadata'],
                     ]
                 );
             });
+    }
+
+    /**
+     * One Commons search, with photographs of other manufacturers removed.
+     *
+     * Wikimedia's full-text search is loose: an "Acura CL" query matches the
+     * Honda Accord chassis code "CL3", so an Acura search came back full of
+     * Hondas. Flagging them was not enough — see MakeRelevanceChecker.
+     *
+     * @param  int|null  $year  null runs the year-relaxed variant of the query
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function relevantImages(CarSearch $search, ?int $year, int $limit): Collection
+    {
+        $images = $this->wikimedia->searchCars(
+            $search->make,
+            $search->model,
+            $year,
+            $search->color,
+            $this->transmissionForQuery($search),
+            $search->transparent_background,
+            $limit
+        );
+
+        $knownMakes = $this->knownMakes();
+
+        return $images
+            ->reject(fn (array $image) => $this->makeChecker->isOffMake(
+                $search->make,
+                $image['title'] ?? null,
+                $image['description'] ?? null,
+                $this->categoriesOf($image),
+                $knownMakes,
+            ))
+            ->values();
     }
 
     /**

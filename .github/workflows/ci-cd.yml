@@ -241,6 +241,14 @@ jobs:
           "$PHP_BIN" artisan route:cache
           "$PHP_BIN" artisan view:cache
 
+          # Boot the framework with the freshly cached config, on the server,
+          # before trusting anything the public URL says. This is the real
+          # post-upgrade failure mode - a stale or broken config/route cache, or
+          # a class that no longer exists - and unlike an HTTP probe it cannot
+          # be masked or challenged by the edge.
+          echo "==> Verifying the application boots"
+          "$PHP_BIN" artisan about --only=environment
+
           echo "==> Ensuring the storage symlink exists"
           "$PHP_BIN" artisan storage:link || true
 
@@ -268,14 +276,30 @@ jobs:
           # A single-shot check turns that blip into a red deploy - a false
           # negative that teaches you to distrust the signal.
           for attempt in 1 2 3 4 5 6; do
+            # No custom User-Agent: SiteGround's WAF answers 403 to unusual
+            # agent strings (verified - a "Mozilla/5.0 (compatible; ...)" value
+            # returned 403 on every attempt while curl's default returned 200).
             code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$url" || echo 000)
             echo "attempt ${attempt}/6: GET $url -> $code"
+
             if [ "$code" = "200" ]; then
               echo "Smoke check passed."
               exit 0
             fi
+
+            # 202 is SiteGround's bot protection challenging the runner, not the
+            # application answering. A previous run failed on exactly this while
+            # the deploy had in fact succeeded. It still proves the site is
+            # reachable and not erroring, and `artisan about` has already
+            # confirmed the app boots on the server, so treat it as a pass and
+            # say so rather than reporting a healthy deploy as broken.
+            if [ "$code" = "202" ]; then
+              echo "::notice::Edge returned 202 (bot-protection challenge), not the application. Site is reachable; app health was confirmed on the server by 'artisan about'."
+              exit 0
+            fi
+
             [ "$attempt" -lt 6 ] && sleep 10
           done
 
-          echo "::error::Site never returned 200 (6 attempts over ~60s). The deploy landed, but the site is not healthy - check storage/logs/laravel.log."
+          echo "::error::Site never returned 200 or 202 (6 attempts over ~60s). The deploy landed, but the site is not serving - check storage/logs/laravel.log."
           exit 1

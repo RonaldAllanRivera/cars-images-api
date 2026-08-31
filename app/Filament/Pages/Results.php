@@ -97,6 +97,20 @@ class Results extends Page implements HasTable
                         default => 'gray',
                     })
                     ->tooltip('Whether the searched make actually appears in the image title, description, or categories.'),
+                Tables\Columns\TextColumn::make('year_confirmed')
+                    ->label('Year match')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => match (true) {
+                        $state === true || $state === 1 => 'Year-specific',
+                        $state === false || $state === 0 => 'Not year-specific',
+                        default => 'Unknown',
+                    })
+                    ->color(fn ($state) => match (true) {
+                        $state === true || $state === 1 => 'success',
+                        $state === false || $state === 0 => 'warning',
+                        default => 'gray',
+                    })
+                    ->tooltip('"Not year-specific" means the year search found nothing usable and the image came from a search with the year dropped. Adjacent years can legitimately return the same photograph.'),
             ])
             ->filters([
                 SelectFilter::make('csv_import_id')
@@ -114,6 +128,22 @@ class Results extends Page implements HasTable
                         }
                         if ($data['value'] === '0') {
                             return $query->where('make_confirmed', false);
+                        }
+
+                        return $query;
+                    }),
+                SelectFilter::make('year_confirmed')
+                    ->label('Year match')
+                    ->options([
+                        '1' => 'Year-specific',
+                        '0' => 'Not year-specific',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        if ($data['value'] === '1') {
+                            return $query->where('year_confirmed', true);
+                        }
+                        if ($data['value'] === '0') {
+                            return $query->where('year_confirmed', false);
                         }
 
                         return $query;

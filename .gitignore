@@ -44,3 +44,4 @@ pnpm-debug.log
 
 # Local-only scratch for deployment credentials — never commit
 *.local.txt
+deploy-secrets.local.txt

@@ -15,30 +15,28 @@ class WikimediaClient
         protected ModelSearchTermNormalizer $modelNormalizer,
     ) {}
 
+    /**
+     * One Commons search. Pass `$year = null` for the year-relaxed variant.
+     *
+     * This method deliberately does NOT retry without the year on an empty
+     * result. It used to, and that put the decision at the wrong layer: the
+     * client can only see whether the API answered, not whether the answer
+     * was usable. A query returning ten Honda Accords for an Acura looks
+     * non-empty here but is rejected wholesale downstream, so the year that
+     * needed the fallback most never got it. `CarImageSearchService` owns the
+     * retry now, because only it knows what survives filtering.
+     */
     public function searchCars(
         string $make,
         ?string $model,
-        int $year,
+        ?int $year,
         ?string $color,
         ?string $transmission,
         bool $transparent,
         int $limit = 10
     ): Collection {
-        $results = $this->cachedSearch(
-            $this->buildQuery($make, $model, $year, $color, $transmission, $transparent),
-            $limit,
-        );
-
-        if ($results->isNotEmpty()) {
-            return $results;
-        }
-
-        // Recall fallback: a hard year term over-constrains Wikimedia full-text
-        // search for models with sparse coverage ("Acura CL 1998 car" returns
-        // nothing, "Acura CL car" returns 10). When the year-specific search is
-        // empty, retry once with the year dropped.
         return $this->cachedSearch(
-            $this->buildQuery($make, $model, null, $color, $transmission, $transparent),
+            $this->buildQuery($make, $model, $year, $color, $transmission, $transparent),
             $limit,
         );
     }
