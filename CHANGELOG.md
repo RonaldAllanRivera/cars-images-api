@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+A half-finished CSV import looked exactly like a finished one, and the Delete
+button on the Results table could not be reached. Both were found by QA-ing a
+screen capture of the admin against the 100-row CSV that produced it: 58
+searches, 59 images, and no way to tell from the page that 23 of those searches
+had never run.
+
+### Added
+
+- **Coverage panel on the Results page.** The table counts images; this counts
+  the searches behind them. A search that never ran and a search that ran and
+  found nothing both leave no rows, so the page reported "Showing 1 to 59 of 59
+  results" over an import that was two thirds unsearched. The panel names the
+  import in view and splits the total four ways — run, found images, ran and
+  found nothing, not run yet — and says plainly that a list missing unsearched
+  rows is incomplete. It scopes to the filtered import, or to the import owning
+  the single search being viewed, and hides itself when there is no import to
+  describe.
+
+- **A `Coverage` filter on Search Queries**, answering the question `status`
+  cannot: a search that found nothing is `completed`, indistinguishable from
+  one that found five images. `Found images` / `Ran, found nothing` /
+  `Not run yet`. The coverage panel's two buttons deep-link into it.
+
+- **`Run all pending`**, a header action that queues every `pending` or
+  `failed` search the current filters select, in id order, and hands it to the
+  existing poll-driven runner. Run state lives on the Livewire component and so
+  does not survive the tab closing — which is the honest behaviour, but left
+  resuming as "page through the table and re-select the rows that did not run".
+  For a 58-row import across three pages that is tedious enough to leave
+  undone, which is the most likely explanation for the import that prompted
+  this work stopping at search 35.
+
+### Fixed
+
+- **The Delete action was clipped off the right edge of the Results table.** At
+  a 1440px viewport the scroll container is 1041px wide and the table wanted
+  1326px; the 283px actions column was almost exactly the 285px that did not
+  fit, so the last action in the row fell off. `Preview`, `Download` and
+  `Delete` now share one `ActionGroup` dropdown — 283px becomes 56px — and the
+  `Year`, `Make` and `Model` columns, which repeat what `Name` already renders
+  ("1997 Acura 2.2CL/3.0CL") for another 270px, are toggleable and hidden by
+  default. Measured after: 0px of overflow at 1440, 1280 and 820, with the
+  actions button fully inside the container at each. At 390px the table still
+  scrolls, by 78px rather than 293px — a 120px thumbnail and a readable name do
+  not fit a phone, and dropping the thumbnail would empty the page of the thing
+  it exists to show.
+
+- **The bulk-run progress panel was styled with CSS that does not exist.** Its
+  `flex`, `p-4`, `h-2` and `bg-gray-*` classes resolved to nothing: the admin
+  panel loads only Filament's precompiled stylesheet, no Vite/Tailwind build
+  runs in deployment, and the panel registers no custom theme. Verified by
+  probing a synthetic element in the live page — `flex` computed to
+  `display: block`, `p-4` to `0px`, and the progress bar to `height: 0`. Both
+  progress panels are now built from Filament's own components, with the bar
+  inline-styled against the palette's custom properties. No build step is
+  introduced; adding one would put an npm install on the deploy path of a
+  shared host that currently has none.
+
+### Changed
+
+- Record actions on `Car Images` and the search-images relation manager moved
+  into the same dropdown. Neither table overflowed — this is consistency, so
+  row actions sit in the same place on every image table.
+
+- `Name` on the Results table sorts by year, make and model, so sorting
+  survives its three single-field columns being hidden by default.
+
+- The Wikimedia-blocked message points at `Run all pending` instead of telling
+  the admin to re-select the remaining rows by hand.
+
 ### Planned
 
 - Move bulk search and bulk download onto a real queue worker so long runs are not bound by the web request timeout (the `RunCarSearchJob`, `FetchWikimediaCarImagesForYearJob`, and `DownloadCarImagesJob` classes exist as scaffolding but are not dispatched yet).

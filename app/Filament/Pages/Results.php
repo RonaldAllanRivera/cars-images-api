@@ -3,6 +3,8 @@
 namespace App\Filament\Pages;
 
 use App\Models\CarImage;
+use App\Models\CarSearch;
+use App\Models\CsvImport;
 use App\Services\Downloads\BatchCsvExporter;
 use App\Services\Downloads\BatchZipBuilder;
 use BackedEnum;
@@ -52,6 +54,11 @@ class Results extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
+            // Sits above the toolbar, not in place of it, so search and filters
+            // are untouched. Returns null when there is no import to describe.
+            ->header(fn () => ($coverage = $this->coverage()) === null
+                ? null
+                : view('filament.pages.results-coverage', ['coverage' => $coverage]))
             ->query(function () {
                 $query = CarImage::query()
                     ->whereHas('search', fn (Builder $q) => $q->whereNotNull('csv_import_id'))
@@ -70,6 +77,9 @@ class Results extends Page implements HasTable
                 Tables\Columns\TextColumn::make('display_name')
                     ->label('Name')
                     ->state(fn (CarImage $record) => "{$record->year} {$record->make} {$record->model}")
+                    // Sorting lived on the separate Year/Make columns, which are now
+                    // hidden by default. Sorting this one covers both.
+                    ->sortable(['year', 'make', 'model'])
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         return $query->where(function ($q) use ($search) {
                             $q->where('make', 'like', "%{$search}%")
@@ -79,12 +89,26 @@ class Results extends Page implements HasTable
                     }),
                 Tables\Columns\TextColumn::make('search.csvImport.original_filename')
                     ->label('Source CSV')
-                    ->limit(30),
-                Tables\Columns\TextColumn::make('year')->sortable(),
-                Tables\Columns\TextColumn::make('make')->sortable(),
-                Tables\Columns\TextColumn::make('model'),
+                    ->limit(30)
+                    // Drops out below `lg`, where width is scarcest. The "CSV Import"
+                    // filter still answers "which import is this?" on small screens.
+                    ->visibleFrom('lg'),
+                // Year, Make and Model repeat what the Name column already shows, at a
+                // cost of ~270px. Hidden by default and restorable from the table's
+                // "Columns" menu for anyone who wants to sort or scan a single field.
+                Tables\Columns\TextColumn::make('year')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('make')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('model')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('make_confirmed')
                     ->label('Make match')
+                    // Below `sm` these two badges are the only thing still forcing a
+                    // sideways scroll. Both have a filter, so nothing is unreachable.
+                    ->visibleFrom('sm')
                     ->badge()
                     ->formatStateUsing(fn ($state) => match (true) {
                         $state === true || $state === 1 => 'Confirmed',
@@ -99,6 +123,9 @@ class Results extends Page implements HasTable
                     ->tooltip('Whether the searched make actually appears in the image title, description, or categories.'),
                 Tables\Columns\TextColumn::make('year_confirmed')
                     ->label('Year match')
+                    // Below `sm` these two badges are the only thing still forcing a
+                    // sideways scroll. Both have a filter, so nothing is unreachable.
+                    ->visibleFrom('sm')
                     ->badge()
                     ->formatStateUsing(fn ($state) => match (true) {
                         $state === true || $state === 1 => 'Year-specific',
@@ -149,18 +176,30 @@ class Results extends Page implements HasTable
                         return $query;
                     }),
             ])
+            /*
+             * Grouped, not inline. Rendered side by side these three actions took a
+             * ~283px column - on their own more than the table overflowed its
+             * scroll container by - so Delete sat past the right edge and could
+             * only be reached by scrolling sideways. As a dropdown the column is
+             * one icon wide and every action is reachable at any viewport width.
+             */
             ->recordActions([
-                Actions\Action::make('preview')
-                    ->label('Preview')
-                    ->icon('heroicon-o-eye')
-                    ->url(fn (CarImage $record) => $record->source_url, true),
-                Actions\Action::make('download')
-                    ->label('Download')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->action(function (CarImage $record) {
-                        return redirect()->route('car-images.download', ['carImage' => $record->id]);
-                    }),
-                Actions\DeleteAction::make(),
+                Actions\ActionGroup::make([
+                    Actions\Action::make('preview')
+                        ->label('Preview')
+                        ->icon('heroicon-o-eye')
+                        ->url(fn (CarImage $record) => $record->source_url, true),
+                    Actions\Action::make('download')
+                        ->label('Download')
+                        ->icon('heroicon-o-arrow-down-tray')
+                        ->action(function (CarImage $record) {
+                            return redirect()->route('car-images.download', ['carImage' => $record->id]);
+                        }),
+                    Actions\DeleteAction::make(),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->tooltip('Preview, download or delete this image'),
             ])
             ->toolbarActions([
                 Actions\BulkAction::make('downloadZip')
@@ -206,6 +245,89 @@ class Results extends Page implements HasTable
                 Actions\DeleteBulkAction::make(),
             ])
             ->paginated([24, 48, 96]);
+    }
+
+    /**
+     * How much of the CSV import in view has actually been searched.
+     *
+     * This table can only show images that exist, so a run that stopped
+     * early and a run that finished having found little look identical:
+     * both render a short list under a confident "Showing 1 to N of N
+     * results". Counting the *searches* behind those rows separates the
+     * two — how many never ran, and how many ran and came back empty.
+     *
+     * Null when there is nothing to describe, which hides the panel.
+     *
+     * @return array{importName: ?string, total: int, searched: int, notRun: int, failed: int, withImages: int, noImages: int, notRunUrl: string, noImagesUrl: string}|null
+     */
+    public function coverage(): ?array
+    {
+        $importId = $this->coverageImportId();
+
+        // Re-built per count rather than cloned: `whereHas` on a shared
+        // builder would leak its subquery into the counts that follow.
+        $searches = fn (): Builder => CarSearch::query()
+            ->whereNotNull('csv_import_id')
+            ->when($importId !== null, fn (Builder $q) => $q->where('csv_import_id', $importId));
+
+        $total = $searches()->count();
+
+        if ($total === 0) {
+            return null;
+        }
+
+        $notRun = $searches()->whereIn('status', ['pending', 'running'])->count();
+
+        return [
+            'importName' => $importId === null
+                ? null
+                : CsvImport::whereKey($importId)->value('original_filename'),
+            'total' => $total,
+            'searched' => $total - $notRun,
+            'notRun' => $notRun,
+            'failed' => $searches()->where('status', 'failed')->count(),
+            'withImages' => $searches()->whereHas('images')->count(),
+            'noImages' => $searches()->where('status', 'completed')->whereDoesntHave('images')->count(),
+            'notRunUrl' => $this->searchQueriesUrl($importId, 'not_run'),
+            'noImagesUrl' => $this->searchQueriesUrl($importId, 'no_images'),
+        ];
+    }
+
+    /**
+     * The import the coverage panel describes: the filtered one, else the
+     * one owning the single search being viewed, else every import.
+     */
+    private function coverageImportId(): ?int
+    {
+        $filtered = $this->getTableFilterState('csv_import_id')['value'] ?? null;
+
+        if (filled($filtered)) {
+            return (int) $filtered;
+        }
+
+        if (filled($this->searchId)) {
+            return CarSearch::whereKey((int) $this->searchId)->value('csv_import_id');
+        }
+
+        return null;
+    }
+
+    /**
+     * Deep-link into Search Queries with its Coverage filter pre-applied, so
+     * "23 not run yet" lands on exactly those 23 rows, ready to run.
+     */
+    private function searchQueriesUrl(?int $importId, string $coverage): string
+    {
+        $filters = ['coverage' => ['value' => $coverage]];
+
+        if ($importId !== null) {
+            $filters['csv_import_id'] = ['value' => (string) $importId];
+        }
+
+        // Filament 5 reads table filters from `filters` in the query string
+        // (v3's `tableFilters` is gone). Wrong key = a link that silently
+        // lands on the unfiltered list, which is worse than no link.
+        return route('filament.admin.resources.search-queries.index', ['filters' => $filters]);
     }
 
     /**

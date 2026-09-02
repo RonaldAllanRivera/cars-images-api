@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Filament\Pages\Results;
 use App\Filament\Resources\CarImageResource\Pages\ListCarImages;
 use App\Filament\Resources\CarMakeResource\Pages\ListCarMakes;
 use App\Filament\Resources\CarSearchResource\Pages\ListCarSearches;
@@ -11,6 +12,7 @@ use App\Filament\Resources\UserResource\Pages\ListUsers;
 use App\Models\CarImage;
 use App\Models\CarMake;
 use App\Models\CarSearch;
+use App\Models\CsvImport;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -110,6 +112,36 @@ class TableActionsTest extends TestCase
         Livewire::actingAs($user)
             ->test(ListUsers::class)
             ->assertTableActionExists('edit')
+            ->assertTableBulkActionExists('delete');
+    }
+
+    /**
+     * The Results page renders its three record actions inside an
+     * `ActionGroup` so the column stays narrow enough for Delete to fit
+     * without scrolling sideways. Grouping is presentational, but it also
+     * changes how the actions are registered, so pin them here: a group
+     * that stopped flattening its actions would take Delete with it.
+     */
+    public function test_results_table_keeps_its_grouped_record_actions(): void
+    {
+        $user = $this->admin();
+        $search = $this->searchWithImage($user);
+        $search->update([
+            'csv_import_id' => CsvImport::create([
+                'original_filename' => 'a.csv',
+                'total_rows' => 1,
+                'unique_combos' => 1,
+                'duplicates_skipped' => 0,
+                'imported_by' => $user->id,
+            ])->id,
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(Results::class)
+            ->assertTableActionExists('preview')
+            ->assertTableActionExists('download')
+            ->assertTableActionExists('delete')
+            ->assertTableBulkActionExists('downloadZip')
             ->assertTableBulkActionExists('delete');
     }
 

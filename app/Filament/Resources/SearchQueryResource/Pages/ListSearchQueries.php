@@ -6,6 +6,7 @@ use App\Exceptions\WikimediaBlockedException;
 use App\Filament\Resources\SearchQueryResource;
 use App\Models\CarSearch;
 use App\Services\Search\RunSearchQueryAction;
+use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Throwable;
@@ -28,6 +29,11 @@ use Throwable;
  * keep calling Wikimedia once the browser driving it has gone. Nothing is
  * lost either way, since finished rows are saved as they go and the rest are
  * still `pending`.
+ *
+ * That last point is why `runAllPending` exists. Resuming used to mean
+ * paging through the table hand-selecting the rows that had not run — for a
+ * 58-row import spread over three pages, tedious enough to leave undone. It
+ * now takes the whole filtered remainder in one click.
  */
 class ListSearchQueries extends ListRecords
 {
@@ -51,6 +57,54 @@ class ListSearchQueries extends ListRecords
      * this run's real pace instead of a figure guessed up front.
      */
     public float $runElapsed = 0.0;
+
+    /**
+     * Cached per request: the header action asks for this to decide whether
+     * to show itself, to label itself, and once more to start the run.
+     *
+     * @var array<int, int>|null
+     */
+    private ?array $runnableIdsCache = null;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\Action::make('runAllPending')
+                ->label(fn (): string => 'Run all pending ('.count($this->runnableSearchIds()).')')
+                ->icon('heroicon-o-play')
+                ->color('primary')
+                // Hidden mid-run: a second seeding would replace the queue of
+                // the run already in flight.
+                ->visible(fn (): bool => ! $this->runActive && $this->runnableSearchIds() !== [])
+                ->requiresConfirmation()
+                ->modalHeading('Run every pending search')
+                ->modalDescription(fn (): string => count($this->runnableSearchIds())
+                    .' searches match the current filters and have not run yet. They run a few at a '
+                    .'time and the progress bar keeps them going — leave this tab open until it finishes.')
+                ->modalSubmitActionLabel('Run them')
+                ->action(fn () => $this->startBulkRun($this->runnableSearchIds())),
+        ];
+    }
+
+    /**
+     * Every search the current filters select that still has work to do.
+     *
+     * Filter-scoped rather than table-wide so "CSV Import: 100.csv" plus this
+     * button means "finish that import", not "run everything in the database".
+     *
+     * @return array<int, int>
+     */
+    public function runnableSearchIds(): array
+    {
+        // Ordered explicitly: the filtered query carries no sort of its own,
+        // and a resumed run should continue in the same order the import
+        // created its searches — CSV order — not whatever the engine returns.
+        return $this->runnableIdsCache ??= $this->getFilteredTableQuery()
+            ?->whereIn('status', ['pending', 'failed'])
+            ->reorder('id')
+            ->pluck('id')
+            ->all() ?? [];
+    }
 
     /**
      * @param  array<int, int>  $ids

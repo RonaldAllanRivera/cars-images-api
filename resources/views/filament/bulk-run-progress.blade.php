@@ -13,75 +13,66 @@
     switches away — the exact thing this feature exists to avoid. Chrome still
     throttles background timers, so a hidden run spaces its chunks out, but it
     keeps advancing and still announces itself when it lands.
+
+    Built from Filament's own components: the panel loads only Filament's
+    precompiled CSS, with no app Tailwind build in deployment, so utility
+    classes such as `flex`, `p-4` or `h-2` resolve to nothing here. The bar is
+    inline-styled against the palette's custom properties for the same reason.
 --}}
-<div
-    @if ($active) wire:poll.keep-alive.1s="runNextChunk" @endif
-    class="fi-section rounded-xl bg-white p-4 shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10"
+{{-- The poll rides a plain wrapper: a conditional attribute among a
+     component tag's own attributes stops Blade parsing the tag as a
+     component, and the mismatched close is a compile error. --}}
+<div @if ($active) wire:poll.keep-alive.1s="runNextChunk" @endif>
+<x-filament::callout
+    :color="$blockMessage !== null ? 'danger' : ($active ? 'primary' : 'gray')"
+    :icon="$blockMessage !== null ? 'heroicon-o-exclamation-triangle' : 'heroicon-o-arrow-path'"
+    :heading="$blockMessage !== null ? 'Paused — Wikimedia blocked' : ($active ? 'Running searches' : 'Paused')"
 >
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-            @if ($active)
-                <x-filament::loading-indicator class="h-5 w-5 text-primary-500" />
-            @endif
+    <x-slot name="description">
+        {{ $processed + $failed }} of {{ $total }}
 
-            <span class="text-sm font-medium text-gray-950 dark:text-white">
-                @if ($blockMessage !== null)
-                    Paused — Wikimedia blocked
-                @elseif ($active)
-                    Running searches
-                @else
-                    Paused
-                @endif
+        @if ($failed > 0)
+            &middot; {{ $failed }} failed
+        @endif
+
+        @if ($active)
+            &middot; about {{ $eta }} left
+        @endif
+
+        <span
+            role="progressbar"
+            aria-valuenow="{{ $percent }}"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            style="display:block;height:.375rem;margin-top:.5rem;border-radius:9999px;background:rgba(128,128,128,.25);overflow:hidden"
+        >
+            <span
+                style="display:block;height:100%;width:{{ $percent }}%;border-radius:9999px;transition:width .5s;background:{{ $blockMessage !== null ? 'var(--danger-600)' : 'var(--primary-600)' }}"
+            ></span>
+        </span>
+
+        @if ($blockMessage !== null)
+            <span style="display:block;margin-top:.5rem">
+                {{ $blockMessage }} — wait for the Retry-After window, then use
+                &ldquo;Run all pending&rdquo; to pick up where this left off.
             </span>
+        @endif
+    </x-slot>
 
-            <span class="text-sm text-gray-500 dark:text-gray-400">
-                {{ $processed + $failed }} of {{ $total }}
-                @if ($failed > 0)
-                    · {{ $failed }} failed
-                @endif
-                @if ($active)
-                    · about {{ $eta }} left
-                @endif
-            </span>
-        </div>
-
-        <div class="flex items-center gap-2">
-            @if ($active)
-                <x-filament::button size="sm" color="gray" wire:click="pauseBulkRun">
-                    Pause
-                </x-filament::button>
-            @elseif ($blockMessage === null)
-                <x-filament::button size="sm" color="primary" wire:click="resumeBulkRun">
-                    Resume
-                </x-filament::button>
-            @endif
-
-            <x-filament::button size="sm" color="gray" wire:click="cancelBulkRun">
-                Dismiss
+    <x-slot name="controls">
+        @if ($active)
+            <x-filament::button size="sm" color="gray" wire:click="pauseBulkRun">
+                Pause
             </x-filament::button>
-        </div>
-    </div>
+        @elseif ($blockMessage === null)
+            <x-filament::button size="sm" color="primary" wire:click="resumeBulkRun">
+                Resume
+            </x-filament::button>
+        @endif
 
-    <div
-        class="mt-3 h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800"
-        role="progressbar"
-        aria-valuenow="{{ $percent }}"
-        aria-valuemin="0"
-        aria-valuemax="100"
-    >
-        <div
-            @class([
-                'h-full rounded-full transition-all duration-500',
-                'bg-primary-600' => $blockMessage === null,
-                'bg-danger-600' => $blockMessage !== null,
-            ])
-            style="width: {{ $percent }}%"
-        ></div>
-    </div>
-
-    @if ($blockMessage !== null)
-        <p class="mt-2 text-sm text-danger-600 dark:text-danger-400">
-            {{ $blockMessage }} — wait for the Retry-After window, then select the remaining rows and run again.
-        </p>
-    @endif
+        <x-filament::button size="sm" color="gray" wire:click="cancelBulkRun">
+            Dismiss
+        </x-filament::button>
+    </x-slot>
+</x-filament::callout>
 </div>

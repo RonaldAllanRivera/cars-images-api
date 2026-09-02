@@ -95,6 +95,28 @@ class SearchQueryResource extends Resource
                     'completed' => 'Completed',
                     'failed' => 'Failed',
                 ]),
+                /*
+                 * The question `status` cannot answer.
+                 *
+                 * A search that ran and found nothing is `completed`, exactly
+                 * like one that found five images — so the rows a CSV import
+                 * silently produced no pictures for were only findable by
+                 * reading the Images column down every page. This filter is
+                 * what the Results coverage panel links into.
+                 */
+                SelectFilter::make('coverage')
+                    ->label('Coverage')
+                    ->options([
+                        'with_images' => 'Found images',
+                        'no_images' => 'Ran, found nothing',
+                        'not_run' => 'Not run yet',
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                        'with_images' => $query->whereHas('images'),
+                        'no_images' => $query->where('status', 'completed')->whereDoesntHave('images'),
+                        'not_run' => $query->whereIn('status', ['pending', 'running']),
+                        default => $query,
+                    }),
             ])
             ->recordActions([
                 Actions\Action::make('run')

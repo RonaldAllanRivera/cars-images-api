@@ -61,27 +61,38 @@ class CarImagesRelationManager extends RelationManager
             ])
             ->filters([])
             ->headerActions([])
+            /*
+             * Grouped to match the Results table. Two actions overflow far
+             * less than three did there, so this is consistency rather than
+             * rescue: row actions live behind the same dropdown, in the same
+             * place, on every image table in the panel.
+             */
             ->recordActions([
-                Actions\Action::make('preview')
-                    ->label('Preview')
-                    ->icon('heroicon-o-magnifying-glass-plus')
-                    ->modalHeading('Image preview')
-                    ->modalContent(fn (CarImage $record) => view('filament.components.car-image-preview', [
-                        'imageUrl' => $record->thumbnail_url ?? $record->source_url,
-                        'sourceUrl' => $record->source_url,
-                        'title' => $record->title,
-                    ]))
-                    ->modalSubmitAction(false)
-                    ->modalCancelAction(fn ($action) => $action->label('Close'))
-                    ->extraModalFooterActions([
-                        Actions\Action::make('download')
-                            ->label('Download')
-                            ->icon('heroicon-o-arrow-down-tray')
-                            ->color('primary')
-                            ->url(fn (CarImage $record) => route('car-images.download', $record))
-                            ->openUrlInNewTab(),
-                    ]),
-                Actions\DeleteAction::make(),
+                Actions\ActionGroup::make([
+                    Actions\Action::make('preview')
+                        ->label('Preview')
+                        ->icon('heroicon-o-magnifying-glass-plus')
+                        ->modalHeading('Image preview')
+                        ->modalContent(fn (CarImage $record) => view('filament.components.car-image-preview', [
+                            'imageUrl' => $record->thumbnail_url ?? $record->source_url,
+                            'sourceUrl' => $record->source_url,
+                            'title' => $record->title,
+                        ]))
+                        ->modalSubmitAction(false)
+                        ->modalCancelAction(fn ($action) => $action->label('Close'))
+                        ->extraModalFooterActions([
+                            Actions\Action::make('download')
+                                ->label('Download')
+                                ->icon('heroicon-o-arrow-down-tray')
+                                ->color('primary')
+                                ->url(fn (CarImage $record) => route('car-images.download', $record))
+                                ->openUrlInNewTab(),
+                        ]),
+                    Actions\DeleteAction::make(),
+                ])
+                    ->label('Actions')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->tooltip('Preview or delete this image'),
             ])
             ->toolbarActions([
                 Actions\BulkAction::make('downloadSelected')
