@@ -52,19 +52,34 @@ class CommonsCategoryResolver
 
         $names = [];
 
-        foreach ([$base, $stripped] as $candidate) {
-            $this->push($names, $candidate);
+        // BOTH token lists are shrunk. Shrinking only the qualifier-stripped
+        // one made a real category unreachable whenever the model string began
+        // with a qualifier: "New Beetle Convertible" reduces to the single
+        // token "Beetle", so the loop never ran and the only names on offer
+        // were the full string and "Volkswagen Beetle" — the 1938 Type 1. A
+        // New Beetle search stored classic Beetles, cached forever.
+        foreach ([$base, $stripped] as $source) {
+            $this->push($names, $source);
+
+            $tokens = $source === '' ? [] : explode(' ', $source);
+
+            // Never shrink to nothing: one model token must remain, so the
+            // bare make is never probed. Category:Mitsubishi is the whole
+            // marque and would answer a search for one specific truck with
+            // arbitrary Mitsubishis.
+            for ($length = count($tokens) - 1; $length >= 1; $length--) {
+                $this->push($names, implode(' ', array_slice($tokens, 0, $length)));
+            }
         }
 
-        $tokens = $stripped === '' ? [] : explode(' ', $stripped);
-
-        // Shrink the token prefix, but never to nothing: one model token must
-        // remain, so the bare make is never probed. Category:Mitsubishi is the
-        // whole brand, and would answer a search for one specific truck with
-        // arbitrary Mitsubishis.
-        for ($length = count($tokens) - 1; $length >= 1; $length--) {
-            $this->push($names, implode(' ', array_slice($tokens, 0, $length)));
-        }
+        // Most specific first. The caller takes the first name that exists, so
+        // interleaving two shrink sequences without re-sorting could offer a
+        // one-token name before a three-token one and attach the wrong car.
+        // PHP 8 sorts are stable, so equal-length names keep insertion order.
+        usort(
+            $names,
+            static fn (string $a, string $b): int => substr_count($b, ' ') <=> substr_count($a, ' '),
+        );
 
         $titles = array_map(static fn (string $name): string => trim($make).' '.$name, $names);
 
