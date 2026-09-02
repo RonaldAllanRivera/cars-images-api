@@ -125,7 +125,7 @@ class SearchQueryResource extends Resource
                     ->color('primary')
                     ->requiresConfirmation()
                     ->modalDescription('Runs up to '.config('cars-images.bulk_run_max_queries_per_chunk').' queries OR '.config('cars-images.bulk_run_max_seconds_per_chunk').' seconds, whichever first. Click again to continue.')
-                    ->action(function ($records) {
+                    ->action(function ($records, $livewire) {
                         $maxQueries = (int) config('cars-images.bulk_run_max_queries_per_chunk');
                         $maxSeconds = (int) config('cars-images.bulk_run_max_seconds_per_chunk');
                         $sleepSeconds = (int) config('cars-images.bulk_run_sleep_seconds_between_queries');
@@ -174,8 +174,24 @@ class SearchQueryResource extends Resource
                                 ->title('Bulk run finished')
                                 ->body("Processed {$processed} queries this chunk. Click 'Run Selected' again to continue.")
                                 ->success()
+                                // Persistent for the same reason the blocked
+                                // notice is: a chunk runs for up to
+                                // bulk_run_max_seconds_per_chunk, which is long
+                                // enough that the admin switches tabs. A toast
+                                // that fades on its own is one they never see.
+                                ->persistent()
                                 ->send();
                         }
+
+                        // Read by resources/views/filament/bulk-run-signal.blade.php,
+                        // which turns it into a tab-title change and an OS
+                        // notification. Both reach a backgrounded tab, which no
+                        // in-page notification can.
+                        $livewire->dispatch(
+                            'bulk-run-finished',
+                            status: $blocked ? 'blocked' : 'finished',
+                            processed: $processed,
+                        );
                     }),
             ]);
     }
