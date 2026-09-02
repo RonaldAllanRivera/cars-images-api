@@ -46,6 +46,21 @@ class SearchQueryResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // Rendered inside the page's Livewire component, so wire:poll binds
+            // to ListSearchQueries. Returning null when idle matters: a poll
+            // that is always present would drive runNextChunk once a second on
+            // a page where nobody is running anything.
+            ->header(fn ($livewire) => $livewire instanceof Pages\ListSearchQueries
+                && ($livewire->runActive || $livewire->runBlockMessage !== null)
+                    ? view('filament.bulk-run-progress', [
+                        'active' => $livewire->runActive,
+                        'total' => $livewire->runTotal,
+                        'processed' => $livewire->runProcessed,
+                        'failed' => $livewire->runFailed,
+                        'blockMessage' => $livewire->runBlockMessage,
+                        'secondsRemaining' => $livewire->runSecondsRemaining(),
+                    ])
+                    : null)
             ->poll('3s')
             ->columns([
                 Tables\Columns\TextColumn::make('from_year')->label('Year')->sortable(),
@@ -124,75 +139,15 @@ class SearchQueryResource extends Resource
                     ->icon('heroicon-o-play')
                     ->color('primary')
                     ->requiresConfirmation()
-                    ->modalDescription('Runs up to '.config('cars-images.bulk_run_max_queries_per_chunk').' queries OR '.config('cars-images.bulk_run_max_seconds_per_chunk').' seconds, whichever first. Click again to continue.')
-                    ->action(function ($records, $livewire) {
-                        $maxQueries = (int) config('cars-images.bulk_run_max_queries_per_chunk');
-                        $maxSeconds = (int) config('cars-images.bulk_run_max_seconds_per_chunk');
-                        $sleepSeconds = (int) config('cars-images.bulk_run_sleep_seconds_between_queries');
-
-                        $start = microtime(true);
-                        $processed = 0;
-                        $blocked = false;
-                        $blockMessage = null;
-
-                        foreach ($records as $record) {
-                            if ($processed >= $maxQueries) {
-                                break;
-                            }
-                            if (microtime(true) - $start >= $maxSeconds) {
-                                break;
-                            }
-                            if (! in_array($record->status, ['pending', 'failed'], true)) {
-                                continue;
-                            }
-
-                            try {
-                                app(RunSearchQueryAction::class)->execute($record);
-                            } catch (WikimediaBlockedException $e) {
-                                $blocked = true;
-                                $blockMessage = "HTTP {$e->statusCode} after {$processed} queries. Retry-After: ".($e->retryAfterSeconds ?? 'n/a').'s';
-                                break;
-                            } catch (Throwable $e) {
-                                // continue past individual non-block failures
-                            }
-
-                            $processed++;
-                            if ($sleepSeconds > 0) {
-                                sleep($sleepSeconds);
-                            }
-                        }
-
-                        if ($blocked) {
-                            Notification::make()
-                                ->title('Bulk run paused — Wikimedia blocked')
-                                ->body($blockMessage)
-                                ->danger()
-                                ->persistent()
-                                ->send();
-                        } else {
-                            Notification::make()
-                                ->title('Bulk run finished')
-                                ->body("Processed {$processed} queries this chunk. Click 'Run Selected' again to continue.")
-                                ->success()
-                                // Persistent for the same reason the blocked
-                                // notice is: a chunk runs for up to
-                                // bulk_run_max_seconds_per_chunk, which is long
-                                // enough that the admin switches tabs. A toast
-                                // that fades on its own is one they never see.
-                                ->persistent()
-                                ->send();
-                        }
-
-                        // Read by resources/views/filament/bulk-run-signal.blade.php,
-                        // which turns it into a tab-title change and an OS
-                        // notification. Both reach a backgrounded tab, which no
-                        // in-page notification can.
-                        $livewire->dispatch(
-                            'bulk-run-finished',
-                            status: $blocked ? 'blocked' : 'finished',
-                            processed: $processed,
-                        );
-                    }),
+                    ->modalDescription('Runs every selected query, a few at a time, and reports progress as it goes. You can pause at any point, and Wikimedia rate-limiting stops it automatically.')
+                    // Seeds the queue and returns immediately. The work happens
+                    // in ListSearchQueries::runNextChunk(), one bounded request
+                    // per poll — doing it here would put the whole selection
+                    // inside a single request and back into max_execution_time
+                    // territory.
+                    ->action(fn ($records, $livewire) => $livewire->startBulkRun(
+                        collect($records)->pluck('id')->all(),
+                    )),
             ]);
     }
 

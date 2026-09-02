@@ -21,6 +21,14 @@ return [
 
     'bulk_run_max_seconds_per_chunk' => env('CARS_BULK_RUN_MAX_SECONDS', 50),
 
+    /*
+     | Wall-clock budget for one auto-driven chunk. Much shorter than the
+     | manual chunk above: the browser polls for the next one immediately, so
+     | a short chunk costs nothing but makes the progress bar and the estimate
+     | move often enough to read as live rather than stuck.
+     */
+    'bulk_run_auto_chunk_seconds' => env('CARS_BULK_RUN_AUTO_CHUNK_SECONDS', 10),
+
     'bulk_run_sleep_seconds_between_queries' => env('CARS_BULK_RUN_SLEEP_SECONDS', 1),
 
     /*
