@@ -135,6 +135,29 @@ class CategoryRetrievalTest extends TestCase
         $this->assertNull(app(WikimediaClient::class)->resolveCategory('Loop'));
     }
 
+    public function test_a_year_scopes_the_search_and_keys_the_cache(): void
+    {
+        // The 500-file cap is not enough on its own: Category:Toyota Corolla
+        // holds 7,777 files and model year 2012 has no title in the first 500,
+        // so the search stored nothing and looked exactly like a year Commons
+        // has no photograph of. intitle: spends the budget on year-relevant
+        // files - it narrows that category from 7,777 hits to 72.
+        Http::fake(['*' => Http::response(['query' => ['pages' => [
+            $this->page(1, 'File:2012 Toyota Corolla.jpg'),
+        ]]], 200)]);
+
+        $client = app(WikimediaClient::class);
+        $client->filesInCategory('Toyota Corolla', 2012);
+
+        Http::assertSent(fn ($request) => ($request->data()['gsrsearch'] ?? '')
+            === 'deepcategory:"Toyota Corolla" intitle:2012');
+
+        // Different years must not share a cache entry, or the first year
+        // searched would answer for every other.
+        $client->filesInCategory('Toyota Corolla', 2013);
+        Http::assertSentCount(2);
+    }
+
     public function test_files_in_category_are_returned_with_image_info(): void
     {
         Http::fake([

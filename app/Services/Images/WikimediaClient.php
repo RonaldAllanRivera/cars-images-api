@@ -151,26 +151,35 @@ class WikimediaClient
     /**
      * Every image file in a category and its subcategories.
      *
-     * Returns the WHOLE category, deliberately: the caller filters by model
-     * year afterwards, and `images_per_year` is applied to what survives that
-     * filter. Truncating here would hand the year filter an arbitrary slice —
-     * Category:Cadillac STS holds 56 files of which 6 name 2005, so a ten-file
-     * fetch finds none of them.
+     * Returns the whole category, or - when `$year` is given - the part of it
+     * whose titles mention that year. The caller still filters properly with
+     * ModelYearMatcher afterwards, and `images_per_year` is applied to what
+     * survives that filter. Truncating on count alone would hand the year
+     * filter an arbitrary slice: Category:Cadillac STS holds 56 files of which
+     * 6 name 2005, so a ten-file fetch finds none of them.
+     *
+     * `$year` exists because the count cap is not enough on its own. The read
+     * stops at `category_max_files` (500) relevance-ordered files, and
+     * Category:Toyota Corolla holds 7,777 - model year 2012 has no title in
+     * the first 500 and two in results 501-1500, so the search stored nothing
+     * and looked identical to a year Commons genuinely has no photograph of.
+     * Adding `intitle:<year>` spends the budget on year-relevant files
+     * instead, narrowing that category from 7,777 hits to 72.
      */
-    public function filesInCategory(string $category): Collection
+    public function filesInCategory(string $category, ?int $year = null): Collection
     {
         $ttl = (int) config('images.wikimedia.cache_ttl', 3600);
 
         return Cache::remember(
-            $this->categoryCacheKey($category),
+            $this->categoryCacheKey($category, $year),
             $ttl,
-            fn () => $this->fetchCategoryFiles($category),
+            fn () => $this->fetchCategoryFiles($category, $year),
         );
     }
 
-    public function forgetCategory(string $category): void
+    public function forgetCategory(string $category, ?int $year = null): void
     {
-        Cache::forget($this->categoryCacheKey($category));
+        Cache::forget($this->categoryCacheKey($category, $year));
     }
 
     /**
@@ -178,17 +187,17 @@ class WikimediaClient
      * `category_max_files` is a different, shorter answer to the same
      * question, and would otherwise keep being served after the cap is raised.
      */
-    protected function categoryCacheKey(string $category): string
+    protected function categoryCacheKey(string $category, ?int $year = null): string
     {
         $max = (int) config('images.wikimedia.category_max_files', 500);
 
-        return 'wikimedia_category_'.md5($category.'|'.$max);
+        return 'wikimedia_category_'.md5($category.'|'.$max.'|'.($year ?? ''));
     }
 
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    protected function fetchCategoryFiles(string $category): Collection
+    protected function fetchCategoryFiles(string $category, ?int $year = null): Collection
     {
         $max = (int) config('images.wikimedia.category_max_files', 500);
         $pageSize = (int) config('images.wikimedia.category_page_size', 200);
@@ -208,7 +217,8 @@ class WikimediaClient
             $response = $this->request(array_merge([
                 'prop' => 'imageinfo',
                 'generator' => 'search',
-                'gsrsearch' => 'deepcategory:"'.$category.'"',
+                'gsrsearch' => 'deepcategory:"'.$category.'"'
+                    .($year !== null ? ' intitle:'.$year : ''),
                 'gsrnamespace' => 6,
                 'gsrlimit' => $pageSize,
                 'iiprop' => 'url|size|mime|extmetadata',

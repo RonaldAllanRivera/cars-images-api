@@ -95,6 +95,12 @@ class CommonsCategoryLocatorTest extends TestCase
         $this->assertNull(app(CommonsCategoryLocator::class)->locate('Acura', null));
         $this->assertNull(app(CommonsCategoryLocator::class)->locate('Acura', '  '));
         Http::assertNothingSent();
+
+        // Mutation testing showed the blank-string half of the guard was
+        // covered only by a TypeError on the null half. Removing just the
+        // trim() clause left the suite green while every "all models" search
+        // accreted a junk lookup row, permanently cached.
+        $this->assertSame(0, CommonsCategoryLookup::count(), 'A blank model must not be cached at all.');
     }
 
     public function test_a_model_carrying_an_illegal_title_character_falls_through_to_a_real_category(): void

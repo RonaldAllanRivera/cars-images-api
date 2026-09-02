@@ -53,6 +53,30 @@ class CommonsCategoryResolverTest extends TestCase
         $this->assertContains('BMW i4', $this->resolver->candidates('BMW', 'i4 eDrive35 Gran Coupe (18 inch Wheels)'));
     }
 
+    public function test_no_model_string_can_reduce_to_the_bare_make(): void
+    {
+        // Mutation testing found this invariant untested and its protection
+        // misattributed: the comment credited the shrink loop bound, but the
+        // guard that actually holds is push()'s empty-string check. A refactor
+        // trusting the comment would start probing Category:Mitsubishi and
+        // attach photographs of the whole marque to one specific truck.
+        foreach ([
+            ['Mitsubishi', 'Truck 2WD'],
+            ['Ford', 'Pickup 2WD'],
+            ['Jeep', 'Grand Cherokee 4WD'],
+            ['Acura', 'CL'],
+            ['MINI', 'Cooper Hardtop 2 door'],
+        ] as [$make, $model]) {
+            foreach ($this->resolver->candidates($make, $model) as $candidate) {
+                $this->assertNotSame(
+                    trim($make),
+                    trim($candidate),
+                    "candidates({$make}, {$model}) offered the bare make."
+                );
+            }
+        }
+    }
+
     public function test_a_bare_make_is_never_a_candidate(): void
     {
         // Category:Mitsubishi is the whole brand. Probing it would attach

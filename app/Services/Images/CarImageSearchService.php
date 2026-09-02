@@ -111,7 +111,9 @@ class CarImageSearchService
             $category = $this->locator->locate($search->make, $search->model);
 
             if ($category !== null) {
-                $this->wikimedia->forgetCategory($category);
+                foreach (range($search->from_year, $search->to_year) as $year) {
+                    $this->wikimedia->forgetCategory($category, $year);
+                }
             }
 
             return $this->db->transaction(function () use ($search) {
@@ -176,7 +178,12 @@ class CarImageSearchService
         // order. Applying the limit to the fetch would hand the year filter an
         // arbitrary slice: Category:Cadillac STS holds 56 files of which 6
         // name 2005, so a ten-file fetch finds none of them.
-        return $this->wikimedia->filesInCategory($category)
+        // The year is passed as a relevance hint, not as the filter: a huge
+        // category would otherwise be truncated to 500 files that need not
+        // include this year at all. ModelYearMatcher below is still what
+        // decides, so a title the hint let through on a coincidence is
+        // rejected exactly as before.
+        return $this->wikimedia->filesInCategory($category, $year)
             ->filter(fn (array $image) => $this->yearMatcher->modelYear(
                 (string) ($image['title'] ?? ''),
                 $search->make,
