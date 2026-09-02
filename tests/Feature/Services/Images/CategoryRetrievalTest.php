@@ -38,15 +38,15 @@ class CategoryRetrievalTest extends TestCase
 
             return Http::response(['query' => ['pages' => [
                 str_contains($titles, 'Acura CL')
-                    ? ['title' => $titles, 'pageid' => 1]
+                    ? ['title' => $titles, 'pageid' => 1, 'categoryinfo' => ['files' => 17, 'subcats' => 2]]
                     : ['title' => $titles, 'missing' => true],
             ]]], 200);
         });
 
         $client = app(WikimediaClient::class);
 
-        $this->assertTrue($client->categoryExists('Acura CL'));
-        $this->assertFalse($client->categoryExists('Acura Nonexistent'));
+        $this->assertSame('Acura CL', $client->resolveCategory('Acura CL'));
+        $this->assertNull($client->resolveCategory('Acura Nonexistent'));
     }
 
     public function test_an_invalid_title_does_not_read_as_an_existing_category(): void
@@ -62,7 +62,77 @@ class CategoryRetrievalTest extends TestCase
             'invalid' => true,
         ]]]], 200));
 
-        $this->assertFalse(app(WikimediaClient::class)->categoryExists('Ford F150 > 8500 lbs GVWR'));
+        $this->assertNull(app(WikimediaClient::class)->resolveCategory('Ford F150 > 8500 lbs GVWR'));
+    }
+
+    public function test_an_empty_redirect_stub_does_not_count_as_an_existing_category(): void
+    {
+        // Category:Ford F150 is a {{Category redirect}} to Category:Ford F-150.
+        // The page exists, so it is neither "missing" nor "invalid", and it is
+        // not a MediaWiki hard redirect either — the redirect is a template.
+        // It holds nothing. Accepting it stopped the candidate walk on a dead
+        // name, cached forever, killing all 654 Ford F150 rows in the CSV.
+        Http::fake(fn () => Http::response(['query' => ['pages' => [[
+            'pageid' => 12345,
+            'title' => 'Category:Ford F150',
+            'categoryinfo' => ['size' => 0, 'pages' => 0, 'files' => 0, 'subcats' => 0],
+        ]]]], 200));
+
+        $this->assertNull(app(WikimediaClient::class)->resolveCategory('Ford F150'));
+    }
+
+    public function test_a_category_holding_only_subcategories_counts_as_existing(): void
+    {
+        // Category:Ford F-150 has 0 direct files but 17 subcategories, and
+        // deepcategory: reads through them. Requiring direct files alone would
+        // reject the very category that holds the photographs.
+        Http::fake(fn () => Http::response(['query' => ['pages' => [[
+            'pageid' => 999,
+            'title' => 'Category:Ford F-150',
+            'categoryinfo' => ['size' => 17, 'pages' => 0, 'files' => 0, 'subcats' => 17],
+        ]]]], 200));
+
+        $this->assertSame('Ford F-150', app(WikimediaClient::class)->resolveCategory('Ford F-150'));
+    }
+
+    public function test_a_category_redirect_is_followed_to_the_page_that_holds_the_files(): void
+    {
+        // {{category redirect}} is a template, not a MediaWiki redirect, so the
+        // API cannot follow it and neither could any candidate built from the
+        // CSV - "F150" can never be spelled "F-150". It is read out of the
+        // wikitext instead.
+        Http::fake(function ($request) {
+            $name = str_replace('Category:', '', $request->data()['titles'] ?? '');
+
+            if ($name === 'Ford F150') {
+                return Http::response(['query' => ['pages' => [[
+                    'pageid' => 1,
+                    'title' => 'Category:Ford F150',
+                    'categoryinfo' => ['files' => 0, 'subcats' => 0],
+                    'revisions' => [['slots' => ['main' => ['content' => '{{category redirect|Ford F-150}}']]]],
+                ]]]], 200);
+            }
+
+            return Http::response(['query' => ['pages' => [[
+                'pageid' => 2,
+                'title' => 'Category:'.$name,
+                'categoryinfo' => ['files' => 0, 'subcats' => 17],
+            ]]]], 200);
+        });
+
+        $this->assertSame('Ford F-150', app(WikimediaClient::class)->resolveCategory('Ford F150'));
+    }
+
+    public function test_a_category_redirect_cycle_terminates(): void
+    {
+        Http::fake(fn ($request) => Http::response(['query' => ['pages' => [[
+            'pageid' => 1,
+            'title' => $request->data()['titles'] ?? '',
+            'categoryinfo' => ['files' => 0, 'subcats' => 0],
+            'revisions' => [['slots' => ['main' => ['content' => '{{category redirect|Loop}}']]]],
+        ]]]], 200));
+
+        $this->assertNull(app(WikimediaClient::class)->resolveCategory('Loop'));
     }
 
     public function test_files_in_category_are_returned_with_image_info(): void

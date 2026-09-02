@@ -40,8 +40,14 @@ class CommonsCategoryLocator
         $category = null;
 
         foreach ($this->resolver->candidates($make, $model) as $candidate) {
-            if ($this->wikimedia->categoryExists($candidate)) {
-                $category = $candidate;
+            // The resolved name can differ from the candidate: Commons points
+            // "Ford F150" at "Ford F-150", and no candidate built from the CSV
+            // could spell the hyphenated form. Store what actually holds the
+            // photographs, not what we guessed.
+            $resolved = $this->wikimedia->resolveCategory($candidate);
+
+            if ($resolved !== null) {
+                $category = $resolved;
                 break;
             }
         }

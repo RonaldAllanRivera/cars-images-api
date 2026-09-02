@@ -117,7 +117,8 @@ class RefreshSearchTest extends TestCase
         Http::fake(function ($request) {
             if (isset($request->data()['titles'])) {
                 return Http::response(['query' => ['pages' => [
-                    ['title' => $request->data()['titles'], 'pageid' => 1],
+                    ['title' => $request->data()['titles'], 'pageid' => 1,
+                        'categoryinfo' => ['files' => 9, 'subcats' => 0]],
                 ]]], 200);
             }
 

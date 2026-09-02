@@ -23,7 +23,7 @@ class CommonsCategoryLocatorTest extends TestCase
 
             return Http::response(['query' => ['pages' => [
                 in_array($name, $existing, true)
-                    ? ['title' => $titles, 'pageid' => 1]
+                    ? ['title' => $titles, 'pageid' => 1, 'categoryinfo' => ['files' => 12, 'subcats' => 1]]
                     : ['title' => $titles, 'missing' => true],
             ]]], 200);
         });
@@ -99,10 +99,13 @@ class CommonsCategoryLocatorTest extends TestCase
 
     public function test_a_model_carrying_an_illegal_title_character_falls_through_to_a_real_category(): void
     {
-        // 27 EPA CSV models carry ">" in a GVWR clause. Commons answers such a
-        // title with {"invalid": true} and no "missing" key, so the walk used
-        // to stop on the first candidate and cache a category that cannot
-        // exist — permanently, since hits never expire.
+        // Two defects in one path. 27 EPA CSV models carry ">" in a GVWR
+        // clause, and Commons answers such a title with {"invalid": true} and
+        // no "missing" key, so the walk used to stop on the first candidate and
+        // cache a category that cannot exist. Falling through then lands on
+        // "Ford F150", which is itself an empty {{category redirect}} stub —
+        // the walk has to follow it to Ford F-150, the name no candidate built
+        // from the CSV could ever spell.
         Http::fake(function ($request) {
             $titles = $request->data()['titles'] ?? '';
             $name = str_replace('Category:', '', $titles);
@@ -117,20 +120,23 @@ class CommonsCategoryLocatorTest extends TestCase
 
             return Http::response(['batchcomplete' => true, 'query' => ['pages' => [
                 $name === 'Ford F150'
-                    ? ['title' => $titles, 'pageid' => 38601528]
-                    : ['title' => $titles, 'missing' => true],
+                    ? ['title' => $titles, 'pageid' => 38601528, 'categoryinfo' => ['files' => 0, 'subcats' => 0],
+                        'revisions' => [['slots' => ['main' => ['content' => '{{category redirect|Ford F-150}}']]]]]
+                    : ($name === 'Ford F-150'
+                        ? ['title' => $titles, 'pageid' => 99, 'categoryinfo' => ['files' => 0, 'subcats' => 17]]
+                        : ['title' => $titles, 'missing' => true]),
             ]]], 200);
         });
 
         $this->assertSame(
-            'Ford F150',
+            'Ford F-150',
             app(CommonsCategoryLocator::class)->locate('Ford', 'F150 2.7L 2WD GVWR>6649 LBS'),
         );
 
         $this->assertDatabaseHas('commons_category_lookups', [
             'make' => 'Ford',
             'model' => 'F150 2.7L 2WD GVWR>6649 LBS',
-            'category' => 'Ford F150',
+            'category' => 'Ford F-150',
         ]);
     }
 

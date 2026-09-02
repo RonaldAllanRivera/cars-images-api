@@ -21,6 +21,12 @@ class WikimediaClient
     private const MAX_CATEGORY_REQUESTS = 10;
 
     /**
+     * How many {{category redirect}} hops to follow before giving up, so a
+     * redirect cycle on Commons cannot stall a synchronous request.
+     */
+    private const MAX_CATEGORY_REDIRECTS = 2;
+
+    /**
      * One Commons API call, with the shared retry policy, block detection and
      * etiquette headers.
      *
@@ -79,17 +85,28 @@ class WikimediaClient
     }
 
     /**
-     * Whether a Commons category page exists.
+     * The canonical Commons category for a candidate name, or null.
      *
-     * `CommonsCategoryLocator` probes candidates with this, most specific
-     * first, so a false answer must mean "absent" and never "request failed".
-     * A network error or a block propagates out of `request()` rather than
-     * being reported as a miss and cached as one.
+     * Returns a NAME rather than a boolean because the name a CSV model string
+     * produces is not always the name that holds the photographs: Commons
+     * points "Ford F150" at "Ford F-150" with a {{category redirect}}, and no
+     * candidate generated from the CSV could ever spell the hyphenated form.
+     *
+     * `CommonsCategoryLocator` walks candidates with this, most specific
+     * first, so null must mean "unusable" and never "request failed". A
+     * network error or a block propagates out of `request()` rather than being
+     * reported as a miss and cached as one.
      */
-    public function categoryExists(string $category): bool
+    public function resolveCategory(string $category, int $depth = 0): ?string
     {
         $response = $this->request([
             'titles' => 'Category:'.$category,
+            'prop' => 'categoryinfo|revisions',
+            'rvprop' => 'content',
+            'rvslots' => 'main',
+            // Follows a MediaWiki hard redirect; the page reported back is
+            // then already the target.
+            'redirects' => 1,
         ]);
 
         $page = $response['query']['pages'][0] ?? null;
@@ -99,9 +116,36 @@ class WikimediaClient
         // {"invalid": true, "invalidreason": "..."} with no "missing" key at
         // all. Testing `missing` alone reports such a title as an existing
         // category, and CommonsCategoryLocator then caches it forever.
-        return $page !== null
-            && ! ($page['missing'] ?? false)
-            && ! ($page['invalid'] ?? false);
+        if ($page === null || ($page['missing'] ?? false) || ($page['invalid'] ?? false)) {
+            return null;
+        }
+
+        $name = preg_replace('/^Category:/i', '', (string) ($page['title'] ?? $category));
+
+        // Commons redirects categories with {{category redirect}}, a template
+        // rather than a MediaWiki redirect, so the API reports the stub as an
+        // ordinary page: not missing, not invalid, and holding nothing. It has
+        // to be read out of the wikitext and followed. Category:Ford F150 is
+        // one of these, and accepting it as-is left all 654 Ford F150 rows in
+        // the CSV permanently empty while Category:Ford F-150 held 2,739 files.
+        $content = (string) ($page['revisions'][0]['slots']['main']['content'] ?? '');
+
+        if ($depth < self::MAX_CATEGORY_REDIRECTS
+            && preg_match('/\{\{\s*category redirect\s*\|\s*([^}|]+?)\s*\}\}/i', $content, $matches) === 1) {
+            return $this->resolveCategory(
+                preg_replace('/^Category:/i', '', trim($matches[1])),
+                $depth + 1,
+            );
+        }
+
+        // Existing is not enough — it has to hold something, or the walk stops
+        // on a dead name and caches that answer forever. Subcategories count,
+        // because deepcategory: reads through them: Category:Ford F-150 itself
+        // has no direct files, only 17 subcats, and the same is true of
+        // Dodge Ram, GMC Sierra and Nissan Pathfinder.
+        $info = $page['categoryinfo'] ?? [];
+
+        return ((int) ($info['files'] ?? 0) + (int) ($info['subcats'] ?? 0)) > 0 ? $name : null;
     }
 
     /**

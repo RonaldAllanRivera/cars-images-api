@@ -50,7 +50,7 @@ class ExactYearImagesTest extends TestCase
 
                 return Http::response(['query' => ['pages' => [
                     $exists
-                        ? ['title' => $data['titles'], 'pageid' => 1]
+                        ? ['title' => $data['titles'], 'pageid' => 1, 'categoryinfo' => ['files' => 17, 'subcats' => 0]]
                         : ['title' => $data['titles'], 'missing' => true],
                 ]]], 200);
             }
