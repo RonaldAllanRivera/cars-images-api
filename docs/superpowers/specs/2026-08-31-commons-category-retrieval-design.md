@@ -74,6 +74,10 @@ Where exact matches exist there are usually several — Saab 9-4X 11, Suzuki Kiz
 
 **36% of rows will store an image; 64% will store nothing.** This is the accepted trade.
 
+> **Superseded 2026-09-02 — the design shipped, then adversarial review found seven defects
+> suppressing coverage. Re-measured after fixing them: 58.9%.** See "Outcome" at the end of this
+> document. Figures in this section describe the design as first specified, not as it now behaves.
+
 > An earlier measurement reported 50%. It was wrong: the naive regex counted photo dates as model years (`Hyundai Santa Fe` 4→1, `Suzuki Kizashi` 21→8, `Audi SQ8` 1→0). 36% is the figure produced by the matcher specified below.
 
 ### Why category resolution is the real bottleneck
@@ -313,7 +317,54 @@ retargeted from `searchCars()` to `filesInCategory()`.
 ## Out of scope
 
 - Relaxing the year rule to accept ranges (`1998-1999` counting for 1998). Deliberately excluded by the
-  exact-year decision; revisit with measured numbers if 36% proves too thin.
+  exact-year decision. Revisited on 2026-09-02 with real numbers and NOT taken up: coverage rose to
+  58.9% on its own once the retrieval defects were fixed, so relaxation was not needed.
 - Non-Wikimedia image providers.
 - Backfilling `year_confirmed` on legacy rows — they are purged, not repaired.
 - Removing the unused classes in `app/Jobs/`. Dead, but unrelated to this change.
+
+
+---
+
+## Outcome (2026-09-02)
+
+The design shipped on 2026-08-31 and was then reviewed adversarially. Seven defects were found, all
+verified against the live API before being fixed, and all of them were suppressing coverage rather
+than being visible as errors.
+
+| Defect | Effect |
+|---|---|
+| Continuation read only `gsroffset` | Every category truncated to one page; Ford Mustang 200 of 415 files |
+| `categoryExists()` accepted MediaWiki-invalid titles | 27 GVWR models locked onto a category that cannot exist |
+| `categoryExists()` accepted empty `{{category redirect}}` stubs | 654 Ford F150 rows dead while Ford F-150 held 2,739 files |
+| Leading year trusted without corroboration | 20.5% of extractions wrong — a 2011 Civic stored as a confirmed 2016 |
+| Leading year beat the make-adjacent year | Model year stated outright in the title was ignored |
+| `PHOTO_DATE` omitted space/underscore separators | `2024_08_24_IMG_5653` read as a 2024 model year |
+| Prefix-shrink walked only the stripped tokens | `New Beetle Convertible` resolved to the 1938 Type 1 |
+
+**Measured after the fixes** — 40 seeded-random models x up to 3 model years = 95 rows, through the
+real retrieval path:
+
+| Outcome | Rows | Share | As first specified |
+|---|---|---|---|
+| Exact-year photograph stored | 56 | **58.9%** | 36% |
+| No category resolved | 22 | 23.2% | 27% |
+| Category has files, none names the year | 10 | 10.5% | 30% |
+| Category exists but empty | 7 | 7.4% | 7% |
+
+Cost: **3.7 API calls** for a model's first year and **1.1** for each further year — the lookup cache
+is what makes 23,994 rows over 5,136 models affordable. Full-list processing is **~12.9 hours**
+synchronous, accepted as manual admin work rather than solved with a batch runner.
+
+### Known limits, accepted rather than fixed
+
+- **Variant precision.** Category retrieval is only ever as precise as make + model + year: a
+  `Category:Honda Civic` read cannot distinguish a 2Dr from a Sedan, and the CSV qualifiers that
+  would (`2Dr`, `FFV`, `Eco`, `e-Hybrid`) are the very tokens the resolver strips to find the
+  category. Roughly a third of stored images are a different body, trim or powertrain within the
+  right model and year. Accepted: make + model + year is the contract.
+- **Case-variant CSV rows.** `Nissan,370z` (2009) cannot resolve, because Commons titles are
+  case-sensitive after the first letter. The fix stops it poisoning the `370Z` rows; it does not
+  recover the row itself.
+- **Sub-brand breadth.** `Alpina XB7` shortens to `Category:BMW Alpina`, which holds every Alpina.
+  The "never emit a bare make" guard does not catch sub-brands. Unquantified.
