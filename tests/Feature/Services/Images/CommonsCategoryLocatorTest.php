@@ -97,6 +97,43 @@ class CommonsCategoryLocatorTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_a_model_carrying_an_illegal_title_character_falls_through_to_a_real_category(): void
+    {
+        // 27 EPA CSV models carry ">" in a GVWR clause. Commons answers such a
+        // title with {"invalid": true} and no "missing" key, so the walk used
+        // to stop on the first candidate and cache a category that cannot
+        // exist — permanently, since hits never expire.
+        Http::fake(function ($request) {
+            $titles = $request->data()['titles'] ?? '';
+            $name = str_replace('Category:', '', $titles);
+
+            if (str_contains($name, '>')) {
+                return Http::response(['batchcomplete' => true, 'query' => ['pages' => [[
+                    'title' => $titles,
+                    'invalidreason' => 'The requested page title contains invalid characters: ">".',
+                    'invalid' => true,
+                ]]]], 200);
+            }
+
+            return Http::response(['batchcomplete' => true, 'query' => ['pages' => [
+                $name === 'Ford F150'
+                    ? ['title' => $titles, 'pageid' => 38601528]
+                    : ['title' => $titles, 'missing' => true],
+            ]]], 200);
+        });
+
+        $this->assertSame(
+            'Ford F150',
+            app(CommonsCategoryLocator::class)->locate('Ford', 'F150 2.7L 2WD GVWR>6649 LBS'),
+        );
+
+        $this->assertDatabaseHas('commons_category_lookups', [
+            'make' => 'Ford',
+            'model' => 'F150 2.7L 2WD GVWR>6649 LBS',
+            'category' => 'Ford F150',
+        ]);
+    }
+
     public function test_a_resolved_category_never_expires(): void
     {
         // A category that exists does not stop existing, so an old hit is

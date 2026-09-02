@@ -65,4 +65,28 @@ class CommonsCategoryResolverTest extends TestCase
     {
         $this->assertSame(['Saturn L200'], $this->resolver->candidates('Saturn', 'L200'));
     }
+
+    public function test_candidates_containing_mediawiki_illegal_characters_are_dropped(): void
+    {
+        // 27 distinct models in the EPA CSV carry a ">" in a GVWR clause.
+        // MediaWiki rejects "<", ">", "#", "[", "]", "|", "{" and "}" in a
+        // page title outright, and answers a query for one with
+        // {"invalid": true} rather than {"missing": true} — which reads as
+        // "this category exists". Such a candidate must never be probed.
+        $candidates = $this->resolver->candidates('Ford', 'F150 2.7L 2WD GVWR>6649 LBS');
+
+        foreach ($candidates as $candidate) {
+            $this->assertDoesNotMatchRegularExpression(
+                '/[#<>\[\]|{}]/',
+                $candidate,
+                "Candidate \"{$candidate}\" carries a character MediaWiki cannot put in a title."
+            );
+        }
+
+        $this->assertContains(
+            'Ford F150',
+            $candidates,
+            'Dropping the illegal candidates must still leave the shortened one that actually exists.'
+        );
+    }
 }

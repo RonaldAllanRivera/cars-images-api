@@ -18,6 +18,18 @@ class CommonsCategoryResolver
         'Hatchback', 'Hardtop', 'Gran Turismo', 'Gran Coupe', 'New',
     ];
 
+    /**
+     * Characters MediaWiki refuses to put in a page title.
+     *
+     * These must be filtered out rather than merely tolerated. Asked about a
+     * title containing one, the API answers `{"invalid": true}` with NO
+     * "missing" key — so a probe that only tests for `missing` reads it as an
+     * existing category. 27 distinct models in the EPA CSV carry ">" in a GVWR
+     * clause ("F150 2.7L 2WD GVWR>6649 LBS"), and every one of them would
+     * otherwise resolve to a category that cannot exist.
+     */
+    private const ILLEGAL_TITLE_CHARS = '/[#<>\[\]|{}]/';
+
     public function __construct(
         protected ModelSearchTermNormalizer $normalizer = new ModelSearchTermNormalizer,
     ) {}
@@ -54,7 +66,15 @@ class CommonsCategoryResolver
             $this->push($names, implode(' ', array_slice($tokens, 0, $length)));
         }
 
-        return array_map(static fn (string $name): string => trim($make).' '.$name, $names);
+        $titles = array_map(static fn (string $name): string => trim($make).' '.$name, $names);
+
+        // Dropping an unusable candidate is not merely tidy: it lets the walk
+        // continue to the shortened name that does exist. "F150 2.7L 2WD
+        // GVWR>6649 LBS" falls through to "Ford F150".
+        return array_values(array_filter(
+            $titles,
+            static fn (string $title): bool => preg_match(self::ILLEGAL_TITLE_CHARS, $title) !== 1,
+        ));
     }
 
     /**

@@ -49,6 +49,22 @@ class CategoryRetrievalTest extends TestCase
         $this->assertFalse($client->categoryExists('Acura Nonexistent'));
     }
 
+    public function test_an_invalid_title_does_not_read_as_an_existing_category(): void
+    {
+        // Verbatim shape of the live Commons response for a title containing
+        // ">". Note there is no "missing" key at all — checking only for
+        // `missing` reports the category as EXISTING, and the locator then
+        // locks onto a name that can never hold files. Hits never expire, so
+        // that poisons the lookup permanently.
+        Http::fake(fn () => Http::response(['batchcomplete' => true, 'query' => ['pages' => [[
+            'title' => 'Category:Ford F150 > 8500 lbs GVWR',
+            'invalidreason' => 'The requested page title contains invalid characters: ">".',
+            'invalid' => true,
+        ]]]], 200));
+
+        $this->assertFalse(app(WikimediaClient::class)->categoryExists('Ford F150 > 8500 lbs GVWR'));
+    }
+
     public function test_files_in_category_are_returned_with_image_info(): void
     {
         Http::fake([
@@ -89,16 +105,23 @@ class CategoryRetrievalTest extends TestCase
         $this->assertSame('File:1997 Acura CL.jpg', $files->first()['title']);
     }
 
-    public function test_pagination_follows_the_continue_cursor(): void
+    public function test_pagination_echoes_the_whole_continue_object(): void
     {
+        // A generator=search query carrying prop=imageinfo continues in TWO
+        // dimensions, and for this query shape the live API returns
+        //   {"iicontinue": "...", "continue": "||"}
+        // with NO gsroffset. Reading only gsroffset stops after one page and
+        // silently truncates every category. MediaWiki's documented protocol
+        // is to echo the entire continue object back, so that is what is
+        // pinned here.
         $calls = 0;
         Http::fake(function ($request) use (&$calls) {
             $calls++;
-            $offset = (int) ($request->data()['gsroffset'] ?? 0);
+            $data = $request->data();
 
-            if ($offset === 0) {
+            if (! isset($data['iicontinue'])) {
                 return Http::response([
-                    'continue' => ['gsroffset' => 1],
+                    'continue' => ['iicontinue' => 'Second.jpg|20210805222232', 'continue' => '||'],
                     'query' => ['pages' => [$this->page(1, 'File:1997 Acura CL.jpg')]],
                 ], 200);
             }
@@ -108,8 +131,53 @@ class CategoryRetrievalTest extends TestCase
 
         $files = app(WikimediaClient::class)->filesInCategory('Acura CL');
 
-        $this->assertCount(2, $files, 'A truncated first page must be followed.');
+        $this->assertCount(2, $files, 'A continued response must be followed, not treated as the end.');
         $this->assertSame(2, $calls);
+        Http::assertSent(fn ($request) => ($request->data()['iicontinue'] ?? null) === 'Second.jpg|20210805222232');
+    }
+
+    public function test_a_file_repeated_across_pages_is_stored_once(): void
+    {
+        // Continuing on iicontinue re-lists pages whose imageinfo was
+        // incomplete, so the same pageid legitimately arrives twice. Left
+        // undeduped it consumes images_per_year slots and can collide with
+        // the (car_search_id, year, provider, provider_image_id) unique index.
+        Http::fake(function ($request) {
+            if (! isset($request->data()['iicontinue'])) {
+                return Http::response([
+                    'continue' => ['iicontinue' => 'Repeat.jpg|1', 'continue' => '||'],
+                    'query' => ['pages' => [$this->page(1, 'File:1997 Acura CL.jpg')]],
+                ], 200);
+            }
+
+            return Http::response(['query' => ['pages' => [
+                $this->page(1, 'File:1997 Acura CL.jpg'),
+                $this->page(2, 'File:1999 Acura CL.jpg'),
+            ]]], 200);
+        });
+
+        $files = app(WikimediaClient::class)->filesInCategory('Acura CL');
+
+        $this->assertSame(['1', '2'], $files->pluck('provider_image_id')->all());
+    }
+
+    public function test_pagination_stops_when_a_continuation_never_ends(): void
+    {
+        // A category that keeps returning a continue token must not spin
+        // forever inside a synchronous Filament request.
+        $calls = 0;
+        Http::fake(function ($request) use (&$calls) {
+            $calls++;
+
+            return Http::response([
+                'continue' => ['iicontinue' => "page-{$calls}|1", 'continue' => '||'],
+                'query' => ['pages' => [$this->page($calls, "File:1997 Acura CL {$calls}.jpg")]],
+            ], 200);
+        });
+
+        app(WikimediaClient::class)->filesInCategory('Acura CL');
+
+        $this->assertLessThanOrEqual(10, $calls, 'The request loop must be hard-bounded.');
     }
 
     public function test_results_are_cached_per_category(): void

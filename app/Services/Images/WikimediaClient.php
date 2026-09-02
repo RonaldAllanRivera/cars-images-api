@@ -12,6 +12,15 @@ use Illuminate\Support\Facades\Http;
 class WikimediaClient
 {
     /**
+     * Hard ceiling on requests for one category.
+     *
+     * All searching runs synchronously inside a Filament request, so an API
+     * that keeps handing back a continuation token must not be able to spin
+     * the page forever.
+     */
+    private const MAX_CATEGORY_REQUESTS = 10;
+
+    /**
      * One Commons API call, with the shared retry policy, block detection and
      * etiquette headers.
      *
@@ -85,7 +94,14 @@ class WikimediaClient
 
         $page = $response['query']['pages'][0] ?? null;
 
-        return $page !== null && ! ($page['missing'] ?? false);
+        // `invalid` is checked as well as `missing`, and they are not
+        // interchangeable: a title MediaWiki cannot represent comes back as
+        // {"invalid": true, "invalidreason": "..."} with no "missing" key at
+        // all. Testing `missing` alone reports such a title as an existing
+        // category, and CommonsCategoryLocator then caches it forever.
+        return $page !== null
+            && ! ($page['missing'] ?? false)
+            && ! ($page['invalid'] ?? false);
     }
 
     /**
@@ -113,9 +129,16 @@ class WikimediaClient
         Cache::forget($this->categoryCacheKey($category));
     }
 
+    /**
+     * The cap is part of the key: a cached entry built under a smaller
+     * `category_max_files` is a different, shorter answer to the same
+     * question, and would otherwise keep being served after the cap is raised.
+     */
     protected function categoryCacheKey(string $category): string
     {
-        return 'wikimedia_category_'.md5($category);
+        $max = (int) config('images.wikimedia.category_max_files', 500);
+
+        return 'wikimedia_category_'.md5($category.'|'.$max);
     }
 
     /**
@@ -127,31 +150,46 @@ class WikimediaClient
         $pageSize = (int) config('images.wikimedia.category_page_size', 200);
 
         $files = collect();
-        $offset = 0;
+        $continue = [];
+        $requests = 0;
 
         do {
-            $response = $this->request([
+            // MediaWiki's continuation protocol is to echo the ENTIRE
+            // `continue` object back as query parameters. Cherry-picking one
+            // key does not work here: a generator=search query carrying
+            // prop=imageinfo continues in two dimensions, and for this request
+            // shape the live API returns {"iicontinue": ..., "continue": "||"}
+            // with no gsroffset at all. Reading gsroffset alone ended the loop
+            // after the first page and silently truncated every category.
+            $response = $this->request(array_merge([
                 'prop' => 'imageinfo',
                 'generator' => 'search',
                 'gsrsearch' => 'deepcategory:"'.$category.'"',
                 'gsrnamespace' => 6,
-                'gsrlimit' => max(1, min($pageSize, $max - $files->count())),
-                'gsroffset' => $offset,
+                'gsrlimit' => $pageSize,
                 'iiprop' => 'url|size|mime|extmetadata',
                 'iiurlwidth' => 1200,
-            ]);
+            ], $continue));
 
-            $files = $files->merge(
-                collect(Arr::get($response, 'query.pages', []))
-                    ->map(fn (array $page) => $this->mapPageToImage($page))
-                    // Namespace 6 (File:) includes PDFs, DjVu and other
-                    // documents. Keep only actual raster/vector images.
-                    ->filter(fn (array $image) => $image['source_url'] !== null
-                        && str_starts_with((string) ($image['mime'] ?? ''), 'image/'))
-            );
+            $files = $files
+                ->merge(
+                    collect(Arr::get($response, 'query.pages', []))
+                        ->map(fn (array $page) => $this->mapPageToImage($page))
+                        // Namespace 6 (File:) includes PDFs, DjVu and other
+                        // documents. Keep only actual raster/vector images.
+                        ->filter(fn (array $image) => $image['source_url'] !== null
+                            && str_starts_with((string) ($image['mime'] ?? ''), 'image/'))
+                )
+                // Continuing on iicontinue re-lists pages whose imageinfo was
+                // incomplete, so the same file legitimately arrives twice.
+                // Deduplicating inside the loop also keeps the count guard
+                // below honest.
+                ->unique(fn (array $image) => $image['provider_image_id'])
+                ->values();
 
-            $offset = Arr::get($response, 'continue.gsroffset');
-        } while ($offset !== null && $files->count() < $max);
+            $continue = Arr::get($response, 'continue', []);
+            $requests++;
+        } while ($continue !== [] && $files->count() < $max && $requests < self::MAX_CATEGORY_REQUESTS);
 
         return $files->take($max)->values();
     }
