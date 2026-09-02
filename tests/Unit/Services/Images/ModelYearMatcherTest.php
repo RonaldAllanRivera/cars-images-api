@@ -61,4 +61,52 @@ class ModelYearMatcherTest extends TestCase
         $this->assertNull($this->matcher->modelYear('File:1023 Acura CL.jpg', 'Acura'));
         $this->assertNull($this->matcher->modelYear('File:3500 Acura CL.jpg', 'Acura'));
     }
+
+    public function test_a_leading_photo_date_is_not_the_model_year(): void
+    {
+        // Mutation testing showed the date strip was never exercised: every
+        // title pinning it also carried a leading model year, so the leading
+        // branch answered correctly on its own. These titles put the capture
+        // date FIRST, where only the strip can save them.
+        $this->assertSame(1997, $this->matcher->modelYear('File:2017.1.23 1997 Acura CL.jpg', 'Acura'));
+        $this->assertNull($this->matcher->modelYear('File:01-28-2010 Acura CL.jpg', 'Acura'));
+        $this->assertNull($this->matcher->modelYear('File:8.2.20 Cadillac STS.jpg', 'Cadillac'));
+    }
+
+    public function test_an_upload_date_separated_by_spaces_is_not_the_model_year(): void
+    {
+        // MediaWiki renders filename underscores as spaces, so the very common
+        // 2024_08_24_IMG_5653.JPG upload arrives as "2024 08 24 IMG 5653".
+        // Commons files that one under "Honda Civic (2011, North America)".
+        $this->assertNull($this->matcher->modelYear('File:2024 08 24 IMG 5653.JPG', 'Honda'));
+        $this->assertNull($this->matcher->modelYear('File:2006 02 13 - College Park - Snowed In.jpg', 'Honda'));
+    }
+
+    public function test_an_event_year_with_no_make_named_is_not_a_model_year(): void
+    {
+        // The most damaging real failure: race, auto-show and news years lead
+        // the title and were stored as the model year with year_confirmed=true.
+        // "2016 Sebring" is filed by Commons as a 2011 Civic; "2010 ASA AutoX"
+        // as a 1987 Civic — 23 years out.
+        $this->assertNull($this->matcher->modelYear('File:2016 Sebring DSC 8285 (28278812954).jpg', 'Honda'));
+        $this->assertNull($this->matcher->modelYear('File:2010 ASA AutoX 4744 (5004598645).jpg', 'Honda'));
+        $this->assertNull($this->matcher->modelYear('File:2019 Canadian International Auto Show (32198734577).jpg', 'Honda'));
+        $this->assertNull($this->matcher->modelYear('File:2012 North American International Auto Show (6729665331).jpg', 'Toyota'));
+    }
+
+    public function test_the_year_beside_the_make_beats_a_leading_event_year(): void
+    {
+        // Both branches fire and disagree. The make-adjacent year is the
+        // stronger assertion: the title states the model year explicitly.
+        $this->assertSame(2016, $this->matcher->modelYear('File:2015 Detroit Auto Show 2016 Ford Mustang.jpg', 'Ford'));
+        $this->assertSame(1997, $this->matcher->modelYear('File:2010 photo of a 1997 Acura CL.jpg', 'Acura'));
+    }
+
+    public function test_a_make_written_without_its_hyphen_still_matches(): void
+    {
+        // Commons writes "Mercedes Benz" as readily as "Mercedes-Benz".
+        $this->assertSame(1963, $this->matcher->modelYear('File:1963 Mercedes Benz 220 SEb Coupe.jpg', 'Mercedes-Benz'));
+        $this->assertSame(1993, $this->matcher->modelYear('File:1993 Mercedes 300 SE Auto.jpg', 'Mercedes'));
+        $this->assertSame(2019, $this->matcher->modelYear('File:2019 Land Rover Range Rover.jpg', 'Land Rover'));
+    }
 }
