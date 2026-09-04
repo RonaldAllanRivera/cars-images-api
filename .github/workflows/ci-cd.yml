@@ -206,12 +206,27 @@ jobs:
             -o ConnectTimeout=20
           )
 
-          # Preflight: the deploy script needs bash (it uses `set -o pipefail`
-          # and a trap). Without this check a bash-less host fails with a bare
-          # `sh: bash: not found` and exit 127, which is a confusing way to
-          # learn that. Verified against a real sshd during development.
-          if ! ssh "${SSH_OPTS[@]}" "$SSH_USER@$SSH_HOST" 'command -v bash >/dev/null'; then
-            echo "::error::No bash on the remote host. The deploy script requires it."
+          # Preflight: prove we can reach the host, and that it has bash (the
+          # deploy script below uses `set -o pipefail` and a trap).
+          #
+          # ssh reserves exit 255 for its OWN transport failures and passes
+          # anything else through from the remote command. Those two cases must
+          # be reported separately: a bare `if ! ssh ...` cannot tell them apart,
+          # and a network timeout then gets announced as "no bash on the remote
+          # host" -- which sends you debugging a server that was never reached.
+          preflight_rc=0
+          preflight_out=$(ssh "${SSH_OPTS[@]}" "$SSH_USER@$SSH_HOST" 'command -v bash >/dev/null' 2>&1) || preflight_rc=$?
+
+          if [ "$preflight_rc" -eq 255 ]; then
+            echo "::error::Cannot reach the deploy host over SSH: ${preflight_out:-no output from ssh}"
+            echo "The deploy never started; nothing on the server was changed."
+            echo "Check, in order: the host is up; SSH_HOST/SSH_PORT/SSH_USER are still current;"
+            echo "the host is not firewalling this runner's IP (SiteGround bans datacenter ranges"
+            echo "after repeated connections); SSH_KNOWN_HOSTS matches the server's current key."
+            exit 1
+          elif [ "$preflight_rc" -ne 0 ]; then
+            echo "::error::No bash on the remote host (ssh exit ${preflight_rc}). The deploy script requires it."
+            echo "Remote output: ${preflight_out:-none}"
             exit 1
           fi
 
