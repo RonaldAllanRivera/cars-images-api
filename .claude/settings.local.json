@@ -13,5 +13,13 @@
       "Bash(git -C /home/allan/code/laravel/cars-images-api diff --cached --name-only)",
       "Bash(git remote *)"
     ]
+  },
+  "enabledPlugins": {
+    "vercel@claude-plugins-official": false,
+    "supabase@claude-plugins-official": false,
+    "chrome-devtools-mcp@claude-plugins-official": false,
+    "typescript-lsp@claude-plugins-official": false,
+    "php-lsp@claude-plugins-official": true,
+    "laravel-boost@claude-plugins-official": true
   }
 }
