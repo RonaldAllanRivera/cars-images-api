@@ -17,4 +17,9 @@ class ListCsvImports extends ListRecords
                 ->label('Upload CSV'),
         ];
     }
+
+    public function getSubheading(): ?string
+    {
+        return CreateCsvImport::importLimitNote();
+    }
 }

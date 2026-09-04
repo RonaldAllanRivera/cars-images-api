@@ -85,6 +85,21 @@ class CsvQueryImporter
 
             $imagesPerYear = (int) config('cars-images.csv_import_default_images_per_year');
 
+            // Second ceiling: what this CSV commits us to downloading from the
+            // Wikimedia API. The combo cap above bounds queries, not images, so
+            // raising images-per-year could otherwise smuggle a run many times
+            // longer than intended past it. Rejecting here costs a second;
+            // discovering it mid-run costs the whole run.
+            $projectedImages = $uniqueCount * $imagesPerYear;
+            $maxProjectedImages = (int) config('cars-images.csv_import_max_projected_images');
+            if ($projectedImages > $maxProjectedImages) {
+                throw new CsvImportException(
+                    "CSV produces {$uniqueCount} unique queries x {$imagesPerYear} images = {$projectedImages} image downloads, "
+                    ."which exceeds the API download limit of {$maxProjectedImages}. "
+                    .'Split the CSV, or lower CSV_IMPORT_DEFAULT_IMAGES_PER_YEAR, and retry.'
+                );
+            }
+
             return DB::transaction(function () use ($file, $user, $totalRows, $uniqueCount, $uniqueCombos, $imagesPerYear, $skippedInvalid) {
                 $csvImport = CsvImport::create([
                     'original_filename' => $file->getClientOriginalName(),

@@ -12,6 +12,32 @@ return [
     'csv_import_default_images_per_year' => env('CSV_IMPORT_DEFAULT_IMAGES_PER_YEAR', 5),
 
     /*
+    | Max size of the uploaded CSV file, in kilobytes. Kept here rather than
+    | inline on the form so the upload rule and the note shown to the admin
+    | read the same number and cannot drift apart.
+    */
+    'csv_import_max_upload_kb' => env('CSV_IMPORT_MAX_UPLOAD_KB', 5120),
+
+    /*
+    | Ceiling on the Wikimedia API image downloads a single CSV may commit us
+    | to: unique queries x csv_import_default_images_per_year.
+    |
+    | Why this exists as its own cap. The combo cap above bounds the number of
+    | QUERIES; it says nothing about the number of IMAGES those queries fetch.
+    | At the defaults, 1,000 queries x 5 images = 5,000 downloads, which the
+    | run then paces at bulk_run_sleep_seconds_between_queries (~17 min of
+    | continuous running) and which leave the app only via bulk_download_max_images
+    | per ZIP (~50 separate downloads). Raising csv_import_default_images_per_year
+    | multiplies all three at once, and without this cap that increase would be
+    | discovered part-way through a long run rather than at upload time.
+    |
+    | The default is deliberately the product of the two caps above it, so
+    | out of the box this rejects nothing the combo cap would have allowed.
+    | Raise it only alongside the pacing and download limits it depends on.
+    */
+    'csv_import_max_projected_images' => env('CSV_IMPORT_MAX_PROJECTED_IMAGES', 5000),
+
+    /*
     |--------------------------------------------------------------------------
     | Bulk run pacing
     |--------------------------------------------------------------------------

@@ -142,4 +142,46 @@ class CsvQueryImporterTest extends TestCase
         $search = CarSearch::first();
         $this->assertSame('Automatic 4-spd', $search->transmission);
     }
+
+    public function test_rejects_when_projected_image_downloads_exceed_max(): void
+    {
+        config([
+            'cars-images.csv_import_default_images_per_year' => 5,
+            'cars-images.csv_import_max_projected_images' => 10,
+        ]);
+
+        $user = User::factory()->create();
+        $csv = $this->makeCsv(<<<'CSV'
+        Make,Model,Year,Transmission
+        Toyota,RAV4,1997,A
+        Toyota,Camry,1998,B
+        Honda,Civic,2010,C
+        CSV);
+
+        $this->expectException(CsvImportException::class);
+        $this->expectExceptionMessageMatches('/15 image downloads.*limit of 10/i');
+
+        app(CsvQueryImporter::class)->import($csv, $user);
+    }
+
+    public function test_allows_import_when_projected_image_downloads_are_within_max(): void
+    {
+        config([
+            'cars-images.csv_import_default_images_per_year' => 5,
+            'cars-images.csv_import_max_projected_images' => 15,
+        ]);
+
+        $user = User::factory()->create();
+        $csv = $this->makeCsv(<<<'CSV'
+        Make,Model,Year,Transmission
+        Toyota,RAV4,1997,A
+        Toyota,Camry,1998,B
+        Honda,Civic,2010,C
+        CSV);
+
+        $result = app(CsvQueryImporter::class)->import($csv, $user);
+
+        $this->assertSame(3, $result->csvImport->unique_combos);
+        $this->assertSame(3, CarSearch::count());
+    }
 }
