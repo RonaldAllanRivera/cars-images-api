@@ -39,6 +39,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Pipeline error log
+    |--------------------------------------------------------------------------
+    |
+    | How long a recorded failure is kept. Nothing prunes on a schedule: there
+    | is no cron on shared hosting, so rows go when `error-events:prune` is run
+    | by hand or from the Prune action on the log page.
+    */
+    'error_log_retention_days' => env('ERROR_LOG_RETENTION_DAYS', 30),
+
+    /*
+    | Ceiling on the events stored against a single CSV import.
+    |
+    | Every rejected row and every failed query logs a row, so one bad upload
+    | could otherwise write thousands. Past this count the import records a
+    | single "further errors suppressed" notice and stops. The count is taken
+    | from the database on each write, because a bulk run is chunked across
+    | separate Livewire requests and an in-memory tally would reset with each.
+    */
+    'error_log_max_events_per_import' => env('ERROR_LOG_MAX_EVENTS_PER_IMPORT', 500),
+
+    /*
+    |--------------------------------------------------------------------------
     | Bulk run pacing
     |--------------------------------------------------------------------------
     */

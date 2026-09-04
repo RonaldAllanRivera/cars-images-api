@@ -3,6 +3,8 @@
 namespace App\Services\Downloads;
 
 use App\Models\CarImage;
+use App\Models\ErrorEvent;
+use App\Services\Logging\ErrorEventLogger;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -13,6 +15,7 @@ class BatchZipBuilder
     public function __construct(
         protected FilenameBuilder $filenames,
         protected ImageResizer $resizer,
+        protected ErrorEventLogger $errorLog,
     ) {}
 
     /**
@@ -55,7 +58,23 @@ class BatchZipBuilder
                 ->get((string) $image->source_url);
 
             if (! $response->successful()) {
-                // Skip individual fetch failures rather than aborting the whole ZIP.
+                // Skip individual fetch failures rather than aborting the whole
+                // ZIP — but record them, or the archive silently comes back
+                // with fewer images than were asked for and nothing says why.
+                $this->errorLog->record(
+                    ErrorEvent::CONTEXT_IMAGE_DOWNLOAD,
+                    'Image fetch failed with HTTP '.$response->status(),
+                    links: [
+                        'car_image_id' => $image->id,
+                        'car_search_id' => $image->car_search_id,
+                    ],
+                    details: [
+                        'http_status' => $response->status(),
+                        'url' => (string) $image->source_url,
+                        'response_excerpt' => $response->body(),
+                    ],
+                );
+
                 continue;
             }
 

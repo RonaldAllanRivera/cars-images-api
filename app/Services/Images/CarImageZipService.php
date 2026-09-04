@@ -3,6 +3,8 @@
 namespace App\Services\Images;
 
 use App\Models\CarImage;
+use App\Models\ErrorEvent;
+use App\Services\Logging\ErrorEventLogger;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -11,6 +13,10 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class CarImageZipService
 {
+    public function __construct(
+        protected ErrorEventLogger $errorLog,
+    ) {}
+
     /**
      * @param  Collection<int, CarImage>  $images
      */
@@ -58,6 +64,23 @@ class CarImageZipService
                 ])->timeout(30)->get($sourceUrl);
 
                 if (! $response->successful()) {
+                    // Recorded before skipping: without this the ZIP quietly
+                    // omits the image and the operator has no way to tell a
+                    // dead source URL from an image that was never selected.
+                    $this->errorLog->record(
+                        ErrorEvent::CONTEXT_IMAGE_DOWNLOAD,
+                        'Image fetch failed with HTTP '.$response->status(),
+                        links: [
+                            'car_image_id' => $image->id,
+                            'car_search_id' => $image->car_search_id,
+                        ],
+                        details: [
+                            'http_status' => $response->status(),
+                            'url' => $sourceUrl,
+                            'response_excerpt' => $response->body(),
+                        ],
+                    );
+
                     continue;
                 }
 

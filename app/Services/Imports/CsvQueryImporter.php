@@ -4,7 +4,9 @@ namespace App\Services\Imports;
 
 use App\Models\CarSearch;
 use App\Models\CsvImport;
+use App\Models\ErrorEvent;
 use App\Models\User;
+use App\Services\Logging\ErrorEventLogger;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
@@ -12,7 +14,36 @@ class CsvQueryImporter
 {
     private const REQUIRED_COLUMNS = ['Make', 'Model', 'Year'];
 
+    public function __construct(
+        protected ErrorEventLogger $errorLog,
+    ) {}
+
+    /**
+     * Import a CSV, recording anything it had to reject.
+     *
+     * Rejections are logged here rather than at the Filament page, so that
+     * every caller of the importer is covered by one edit — the same reason
+     * RunSearchQueryAction logs rather than the bulk-run loop above it.
+     */
     public function import(UploadedFile $file, User $user): CsvImportResult
+    {
+        try {
+            return $this->runImport($file, $user);
+        } catch (CsvImportException $e) {
+            // A rejected upload never becomes a CsvImport row, so there is no
+            // import to link to — the filename is the only handle the operator
+            // has on which upload this was.
+            $this->errorLog->record(
+                ErrorEvent::CONTEXT_CSV_UPLOAD,
+                $e,
+                details: ['filename' => $file->getClientOriginalName()],
+            );
+
+            throw $e;
+        }
+    }
+
+    private function runImport(UploadedFile $file, User $user): CsvImportResult
     {
         $handle = fopen($file->getRealPath(), 'r');
         if ($handle === false) {
@@ -43,6 +74,7 @@ class CsvQueryImporter
             $minYear = 1900;
             $totalRows = 0;
             $skippedInvalid = 0;
+            $rejected = [];
             $uniqueCombos = []; // key: "year|make|model" → first occurrence row data
 
             while (($row = fgetcsv($handle)) !== false) {
@@ -51,18 +83,19 @@ class CsvQueryImporter
                 $model = trim($row[$modelIdx] ?? '');
                 $year = trim($row[$yearIdx] ?? '');
 
-                if ($make === '' || $model === '' || $year === '' || ! ctype_digit($year)) {
+                $reason = $this->rejectionReason($make, $model, $year, $minYear, $maxYear);
+                if ($reason !== null) {
+                    $rejected[] = [
+                        'row_number' => $totalRows,
+                        'raw_row' => implode(',', array_map(strval(...), $row)),
+                        'reason' => $reason,
+                    ];
                     $skippedInvalid++;
 
                     continue;
                 }
 
                 $yearInt = (int) $year;
-                if ($yearInt < $minYear || $yearInt > $maxYear) {
-                    $skippedInvalid++;
-
-                    continue;
-                }
 
                 $key = $yearInt.'|'.$make.'|'.$model;
                 if (! isset($uniqueCombos[$key])) {
@@ -100,7 +133,7 @@ class CsvQueryImporter
                 );
             }
 
-            return DB::transaction(function () use ($file, $user, $totalRows, $uniqueCount, $uniqueCombos, $imagesPerYear, $skippedInvalid) {
+            $result = DB::transaction(function () use ($file, $user, $totalRows, $uniqueCount, $uniqueCombos, $imagesPerYear, $skippedInvalid) {
                 $csvImport = CsvImport::create([
                     'original_filename' => $file->getClientOriginalName(),
                     'total_rows' => $totalRows,
@@ -136,8 +169,60 @@ class CsvQueryImporter
 
                 return new CsvImportResult($csvImport, $skippedInvalid);
             });
+
+            // The import row does not exist until that transaction commits, so
+            // rejections are buffered during the parse and written here, where
+            // they can carry the csv_import_id that makes them findable.
+            foreach ($rejected as $row) {
+                $this->errorLog->record(
+                    ErrorEvent::CONTEXT_CSV_ROW,
+                    $row['reason'],
+                    links: ['csv_import_id' => $result->csvImport->id],
+                    details: ['row_number' => $row['row_number'], 'raw_row' => $row['raw_row']],
+                    severity: 'warning',
+                );
+            }
+
+            return $result;
         } finally {
             fclose($handle);
         }
+    }
+
+    /**
+     * Why a row cannot become a query, or null if it can.
+     *
+     * Returns prose rather than a code: this string is what the operator reads
+     * in the log to work out how to fix their spreadsheet.
+     */
+    private function rejectionReason(string $make, string $model, string $year, int $minYear, int $maxYear): ?string
+    {
+        $missing = [];
+
+        if ($make === '') {
+            $missing[] = 'Make';
+        }
+        if ($model === '') {
+            $missing[] = 'Model';
+        }
+        if ($year === '') {
+            $missing[] = 'Year';
+        }
+
+        if ($missing !== []) {
+            return implode(', ', $missing).' missing.';
+        }
+
+        if (! ctype_digit($year)) {
+            return "Year '{$year}' is not a number.";
+        }
+
+        $yearInt = (int) $year;
+
+        if ($yearInt < $minYear || $yearInt > $maxYear) {
+            return "Year {$yearInt} is outside the accepted range {$minYear}-{$maxYear}.";
+        }
+
+        return null;
     }
 }
