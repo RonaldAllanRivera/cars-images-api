@@ -75,11 +75,7 @@ class ErrorEventResource extends Resource
                 Tables\Columns\TextColumn::make('context')
                     ->badge()
                     ->formatStateUsing(fn (string $state) => ErrorEvent::contexts()[$state] ?? $state)
-                    ->color(fn (string $state) => match ($state) {
-                        ErrorEvent::CONTEXT_WIKIMEDIA_BLOCK => 'danger',
-                        ErrorEvent::CONTEXT_CSV_ROW => 'warning',
-                        default => 'gray',
-                    }),
+                    ->color(fn (string $state) => ErrorEvent::contextColor($state)),
                 Tables\Columns\TextColumn::make('message')
                     ->searchable()
                     ->wrap()

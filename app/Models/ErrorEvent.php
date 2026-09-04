@@ -64,6 +64,34 @@ class ErrorEvent extends Model
         ];
     }
 
+    /**
+     * The Filament badge colour for a context, shared by the log table and the
+     * dashboard so the two cannot drift apart.
+     */
+    public static function contextColor(string $context): string
+    {
+        return match ($context) {
+            self::CONTEXT_WIKIMEDIA_BLOCK => 'danger',
+            self::CONTEXT_CSV_ROW => 'warning',
+            default => 'gray',
+        };
+    }
+
+    /**
+     * The same idea in hex, because Chart.js takes colours, not palette names.
+     */
+    public static function contextChartColor(string $context): string
+    {
+        return match ($context) {
+            self::CONTEXT_WIKIMEDIA_BLOCK => '#dc2626',
+            self::CONTEXT_CSV_ROW => '#d97706',
+            self::CONTEXT_CSV_UPLOAD => '#7c3aed',
+            self::CONTEXT_SEARCH_RUN => '#2563eb',
+            self::CONTEXT_IMAGE_DOWNLOAD => '#0891b2',
+            default => '#94a3b8',
+        };
+    }
+
     public function carSearch(): BelongsTo
     {
         return $this->belongsTo(CarSearch::class);
