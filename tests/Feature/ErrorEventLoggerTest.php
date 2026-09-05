@@ -7,9 +7,9 @@ use App\Models\CsvImport;
 use App\Models\ErrorEvent;
 use App\Models\User;
 use App\Services\Logging\ErrorEventLogger;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Schema;
+use PDOException;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -95,20 +95,26 @@ class ErrorEventLoggerTest extends TestCase
 
     public function test_a_failing_write_does_not_propagate_to_the_caller(): void
     {
-        Schema::drop('error_events');
+        // Fail the insert itself rather than dropping the table. A test cannot
+        // undo DDL: MySQL commits it implicitly, and on sqlite :memory: the
+        // migrate:fresh that would rebuild the table ends in a VACUUM, which
+        // SQLite refuses inside the transaction RefreshDatabase holds open.
+        // Either way the damage outlives the test and every later test runs
+        // against a schema this one destroyed.
+        ErrorEvent::creating(function () {
+            throw new QueryException(
+                'sqlite',
+                'insert into "error_events" ("context") values (?)',
+                ['search_run'],
+                new PDOException('no such table: error_events'),
+            );
+        });
 
-        try {
-            $this->logger()->record('search_run', new RuntimeException('the original failure'));
+        $this->logger()->record('search_run', new RuntimeException('the original failure'));
 
-            // Reaching here at all is the assertion: a broken log must not break
-            // the run it is reporting on.
-            $this->assertTrue(true);
-        } finally {
-            // DDL implicitly commits on MySQL, so RefreshDatabase's rollback
-            // cannot put the table back. Rebuild it here or every later test in
-            // the suite runs against a schema this one destroyed.
-            Artisan::call('migrate:fresh');
-        }
+        // Reaching here at all is the assertion: a broken log must not break
+        // the run it is reporting on.
+        $this->assertTrue(true);
     }
 
     public function test_binary_detail_values_are_stored_rather_than_breaking_the_write(): void
