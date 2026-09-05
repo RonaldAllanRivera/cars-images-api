@@ -148,10 +148,17 @@ with:
 ```bash
           # Deployable if ANY changed path is neither documentation nor the
           # Expo app. grep -v exits 0 when at least one line fails to match.
-          # The paths-ignore on the triggers already skips mobile-only pushes;
-          # this catches what that cannot - workflow_dispatch runs and commits
-          # that touch both halves (which must still deploy, since Laravel
-          # changed).
+          #
+          # The paths-ignore on the triggers already stops a mobile-only push
+          # from starting this workflow at all. What this filter adds is the
+          # push that mixes only docs/ and mobile/ changes: docs/ is not in
+          # paths-ignore, so the workflow starts, and without ^mobile/ here
+          # that push would count as deployable. A commit touching Laravel
+          # and mobile/ together still deploys, since Laravel changed.
+          #
+          # workflow_dispatch never reaches this line: the branch above treats
+          # any non-push event as deployable, because a manual run is a
+          # deliberate deploy. Nothing here guards a manual run.
           if printf '%s\n' "$changed" | grep -qvE '\.md$|^docs/|^mobile/|^\.github/workflows/mobile\.yml$'; then
 ```
 

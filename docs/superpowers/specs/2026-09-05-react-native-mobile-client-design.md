@@ -126,8 +126,12 @@ is ever made a required status check, mobile-only PRs become unmergeable.
 if printf '%s\n' "$changed" | grep -qvE '\.md$|^docs/|^mobile/'; then
 ```
 
-This covers what step 1 cannot: `workflow_dispatch` runs and **mixed commits**.
-A commit touching both halves still deploys — correct, since Laravel changed.
+This covers what step 1 cannot: a push that mixes only `docs/` and `mobile/`
+changes. `docs/` is not path-ignored, so the workflow starts, and the filter
+must then classify `mobile/` as non-deployable. A commit touching both halves
+still deploys — correct, since Laravel changed. `workflow_dispatch` never
+reaches the filter: the job treats any non-push event as deployable, because
+a manual run is a deliberate deploy.
 
 **3. New `mobile.yml`,** the mirror image, triggered on
 `paths: ['mobile/**', '.github/workflows/mobile.yml']`.
