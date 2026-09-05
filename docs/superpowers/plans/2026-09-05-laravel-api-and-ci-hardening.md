@@ -859,6 +859,9 @@ return new class extends Migration
     {
         Schema::table('car_images', function (Blueprint $table) {
             $table->dropConstrainedForeignId('reviewed_by');
+            // SQLite will not drop a column an index still references; MySQL
+            // would drop the index implicitly. Explicit either way.
+            $table->dropIndex(['review_status']);
             $table->dropColumn(['review_status', 'reviewed_at']);
         });
     }
