@@ -18,6 +18,16 @@
         </include>
     </source>
     <php>
+        <!--
+            The suite compiles every Blade view it renders in-process. On a
+            cold view cache (a fresh checkout, or right after any composer
+            require, whose post-autoload-dump runs filament:upgrade and clears
+            it) that compilation plus the 3000x2000 resize in BatchZipBuilderTest
+            peaks above PHP's default 128M and dies with "Allowed memory size
+            exhausted" in ImageResizer. CI runs with a higher limit and never
+            sees it; declare the real requirement so local runs match.
+        -->
+        <ini name="memory_limit" value="256M"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
