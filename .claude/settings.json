@@ -1,0 +1,11 @@
+{
+  "enabledPlugins": {
+    "php-lsp@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "laravel-boost@claude-plugins-official": true,
+    "vercel@claude-plugins-official": false,
+    "supabase@claude-plugins-official": false,
+    "chrome-devtools-mcp@claude-plugins-official": false,
+    "plugin-dev@claude-plugins-official": false
+  }
+}
