@@ -3,7 +3,18 @@ name: CI / Deploy
 on:
   push:
     branches: [main]
+    # The Expo app under mobile/ has its own workflow (mobile.yml). Filtering
+    # here, at the workflow level, means no runner starts for a mobile-only
+    # push. Note that a skipped workflow reports "pending", not "success" -
+    # never make a job in this file a required status check, or mobile-only
+    # pull requests become unmergeable.
+    paths-ignore:
+      - 'mobile/**'
+      - '.github/workflows/mobile.yml'
   pull_request:
+    paths-ignore:
+      - 'mobile/**'
+      - '.github/workflows/mobile.yml'
   workflow_dispatch:
 
 # Never let two deploys touch the server at once. A queued run waits for the
@@ -137,9 +148,13 @@ jobs:
           echo "Changed files:"
           echo "$changed"
 
-          # Deployable if ANY changed path is not documentation. grep -v exits 0
-          # when at least one line fails to match the docs pattern.
-          if printf '%s\n' "$changed" | grep -qvE '\.md$|^docs/'; then
+          # Deployable if ANY changed path is neither documentation nor the
+          # Expo app. grep -v exits 0 when at least one line fails to match.
+          # The paths-ignore on the triggers already skips mobile-only pushes;
+          # this catches what that cannot - workflow_dispatch runs and commits
+          # that touch both halves (which must still deploy, since Laravel
+          # changed).
+          if printf '%s\n' "$changed" | grep -qvE '\.md$|^docs/|^mobile/|^\.github/workflows/mobile\.yml$'; then
             echo "deployable=true" >> "$GITHUB_OUTPUT"
             echo "-> code changed; the deploy will run."
           else
@@ -268,6 +283,11 @@ jobs:
           # compiled assets, and any leftover local modification would turn a
           # deploy into a merge conflict. Nothing on the server is authored by
           # hand -- .env and storage/ are untracked and are not touched by this.
+          # This checkout includes mobile/ (the Expo app). It is a few MB of
+          # TypeScript that PHP never executes; sparse-checkout would keep it
+          # off the box at the cost of a manual server-side step that breaks
+          # deploys confusingly when forgotten. Accepted deliberately - see
+          # docs/superpowers/specs/2026-09-05-react-native-mobile-client-design.md.
           git reset --hard origin/main
 
           echo "==> Installing dependencies"
