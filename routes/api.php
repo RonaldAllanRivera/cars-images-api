@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\MeController;
 use App\Http\Controllers\Api\V1\ImageController;
+use App\Http\Controllers\Api\V1\SearchController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -32,6 +33,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::middleware(['ability:'.TokenAbilities::SEARCH_READ, 'throttle:120,1'])->group(function () {
             Route::get('images', [ImageController::class, 'index'])->name('images.index');
             Route::get('images/{image}', [ImageController::class, 'show'])->name('images.show');
+
+            Route::get('searches', [SearchController::class, 'index'])->name('searches.index');
+            Route::get('searches/{search}', [SearchController::class, 'show'])->name('searches.show');
+            Route::get('searches/{search}/images', [SearchController::class, 'images'])->name('searches.images');
         });
     });
 });
