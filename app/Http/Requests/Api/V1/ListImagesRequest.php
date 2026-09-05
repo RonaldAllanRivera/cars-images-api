@@ -18,20 +18,24 @@ class ListImagesRequest extends FormRequest
     }
 
     /**
-     * Normalize the two verdict filters before the `boolean` rule sees them.
+     * Remap the two verdict filters' "true"/"false" spelling to 1/0 before
+     * the `boolean` rule sees them.
      *
-     * Laravel's `boolean` rule only accepts true, false, 0, 1, '0', '1' -
-     * not the query-string literals "true"/"false" a client actually sends.
-     * filter_var() maps both spellings onto real booleans and turns anything
-     * else into null, which the rule then rejects as invalid input.
+     * A JS client encodes booleans as the strings "true"/"false" in a query
+     * string, but Laravel's `boolean` rule only accepts 0/1. Everything else
+     * - blank, "yes", "maybe" - is left untouched and still 422s.
      */
     protected function prepareForValidation(): void
     {
         foreach (['make_confirmed', 'year_confirmed'] as $field) {
             if ($this->has($field)) {
-                $this->merge([
-                    $field => filter_var($this->input($field), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE),
-                ]);
+                $value = $this->input($field);
+
+                if ($value === 'true') {
+                    $this->merge([$field => '1']);
+                } elseif ($value === 'false') {
+                    $this->merge([$field => '0']);
+                }
             }
         }
     }

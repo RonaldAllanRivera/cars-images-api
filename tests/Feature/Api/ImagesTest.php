@@ -56,6 +56,7 @@ class ImagesTest extends ApiTestCase
 
         foreach ([
             'make=Toyota', 'model=RAV4', 'year=1997', 'make_confirmed=1', 'year_confirmed=true',
+            'make_confirmed=true', 'year_confirmed=1',
             'review_status=approved', 'download_status=downloaded',
         ] as $query) {
             $ids = $this->getJson("/api/v1/images?{$query}")->assertOk()->json('data.*.id');
@@ -63,6 +64,9 @@ class ImagesTest extends ApiTestCase
         }
 
         $ids = $this->getJson('/api/v1/images?make_confirmed=0')->assertOk()->json('data.*.id');
+        $this->assertSame([$miss->id], $ids, 'false must exclude the unknown (null) verdict');
+
+        $ids = $this->getJson('/api/v1/images?year_confirmed=false')->assertOk()->json('data.*.id');
         $this->assertSame([$miss->id], $ids, 'false must exclude the unknown (null) verdict');
     }
 
@@ -74,6 +78,17 @@ class ImagesTest extends ApiTestCase
             ->assertJsonValidationErrors(['review_status']);
         $this->getJson('/api/v1/images?per_page=500')->assertUnprocessable()
             ->assertJsonValidationErrors(['per_page']);
+    }
+
+    public function test_boolean_filters_accept_only_true_false_and_1_0(): void
+    {
+        $this->actingAsApiUser([TokenAbilities::SEARCH_READ]);
+
+        foreach (['make_confirmed=maybe', 'make_confirmed=yes', 'make_confirmed=', 'year_confirmed=on'] as $query) {
+            $field = explode('=', $query)[0];
+            $this->getJson("/api/v1/images?{$query}")->assertUnprocessable()
+                ->assertJsonValidationErrors([$field]);
+        }
     }
 
     public function test_show_returns_the_full_record(): void
@@ -108,6 +123,7 @@ class ImagesTest extends ApiTestCase
     {
         $this->actingAsApiUser([TokenAbilities::SEARCH_READ]);
 
-        $this->getJson('/api/v1/images/999999')->assertNotFound();
+        $this->getJson('/api/v1/images/999999')->assertNotFound()
+            ->assertJsonStructure(['message']);
     }
 }
