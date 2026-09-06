@@ -4,6 +4,8 @@ use App\Auth\TokenAbilities;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\MeController;
+use App\Http\Controllers\Api\V1\ErrorController;
+use App\Http\Controllers\Api\V1\HealthSummaryController;
 use App\Http\Controllers\Api\V1\ImageController;
 use App\Http\Controllers\Api\V1\ReviewImageController;
 use App\Http\Controllers\Api\V1\SearchController;
@@ -49,5 +51,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::patch('images/{image}/review', ReviewImageController::class)
             ->middleware(['ability:'.TokenAbilities::REVIEW_WRITE, 'throttle:60,1'])
             ->name('images.review');
+
+        Route::middleware(['ability:'.TokenAbilities::ERRORS_READ, 'throttle:120,1'])->group(function () {
+            Route::get('health/summary', HealthSummaryController::class)->name('health.summary');
+            Route::get('errors', [ErrorController::class, 'index'])->name('errors.index');
+        });
     });
 });
