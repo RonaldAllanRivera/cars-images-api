@@ -47,6 +47,17 @@ class SearchCreateTest extends ApiTestCase
             ->assertJsonValidationErrors(['images_per_year']);
     }
 
+    public function test_a_non_integer_year_gets_only_the_integer_error(): void
+    {
+        $this->actingAsApiUser([TokenAbilities::SEARCH_WRITE]);
+
+        $response = $this->postJson('/api/v1/searches', ['from_year' => 'abc'] + self::PAYLOAD)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['from_year']);
+
+        $this->assertArrayNotHasKey('to_year', $response->json('errors'), 'the span rule must not run on a year that failed validation');
+    }
+
     public function test_a_search_is_created_run_inline_and_returned_completed(): void
     {
         $user = $this->actingAsApiUser([TokenAbilities::SEARCH_WRITE]);

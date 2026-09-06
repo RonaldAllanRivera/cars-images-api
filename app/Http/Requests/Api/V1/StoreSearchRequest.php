@@ -42,6 +42,12 @@ class StoreSearchRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
+            // The field rules have already run; a year that failed them is
+            // not a number to subtract from.
+            if ($validator->errors()->hasAny(['from_year', 'to_year'])) {
+                return;
+            }
+
             $span = (int) config('cars-images.api_search_max_year_span');
             $width = abs((int) $this->input('to_year') - (int) $this->input('from_year'));
 
