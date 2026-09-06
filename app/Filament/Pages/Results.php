@@ -138,6 +138,17 @@ class Results extends Page implements HasTable
                         default => 'gray',
                     })
                     ->tooltip('"Not year-specific" means the year search found nothing usable and the image came from a search with the year dropped. Adjacent years can legitimately return the same photograph.'),
+                Tables\Columns\TextColumn::make('review_status')
+                    ->label('Review')
+                    ->visibleFrom('sm')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state) => ucfirst($state))
+                    ->color(fn (string $state) => match ($state) {
+                        CarImage::REVIEW_APPROVED => 'success',
+                        CarImage::REVIEW_REJECTED => 'danger',
+                        default => 'gray',
+                    })
+                    ->tooltip('The reviewer\'s verdict, set from the mobile app. Independent of the make/year matches, which are the machine\'s.'),
             ])
             ->filters([
                 SelectFilter::make('csv_import_id')
@@ -175,6 +186,12 @@ class Results extends Page implements HasTable
 
                         return $query;
                     }),
+                SelectFilter::make('review_status')
+                    ->label('Review')
+                    ->options(array_combine(
+                        CarImage::reviewStatuses(),
+                        array_map('ucfirst', CarImage::reviewStatuses()),
+                    )),
             ])
             /*
              * Grouped, not inline. Rendered side by side these three actions took a
