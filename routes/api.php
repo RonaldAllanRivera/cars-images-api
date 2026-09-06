@@ -38,5 +38,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('searches/{search}', [SearchController::class, 'show'])->name('searches.show');
             Route::get('searches/{search}/images', [SearchController::class, 'images'])->name('searches.images');
         });
+
+        // Reaches Wikimedia, which has blocked this app before: the tightest
+        // authenticated limit, on top of the size caps in StoreSearchRequest.
+        Route::post('searches', [SearchController::class, 'store'])
+            ->middleware(['ability:'.TokenAbilities::SEARCH_WRITE, 'throttle:10,1'])
+            ->name('searches.store');
     });
 });
