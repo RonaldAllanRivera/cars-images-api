@@ -2807,12 +2807,18 @@ class CorsTest extends ApiTestCase
             ->assertHeader('Access-Control-Allow-Origin', self::ORIGIN);
     }
 
-    public function test_any_other_origin_does_not(): void
+    public function test_any_other_origin_is_never_echoed_back(): void
     {
         config(['cors.allowed_origins' => [self::ORIGIN]]);
 
-        $this->preflight('https://evil.example')
-            ->assertHeaderMissing('Access-Control-Allow-Origin');
+        $header = $this->preflight('https://evil.example')->headers->get('Access-Control-Allow-Origin');
+
+        // With one allowed origin, HandleCors answers every request with that
+        // origin and lets the browser refuse any other page. Absent or equal to
+        // the configured origin are both refusals; echoing the caller's origin
+        // would be the leak.
+        $this->assertNotSame('https://evil.example', $header);
+        $this->assertContains($header, [null, self::ORIGIN]);
     }
 }
 ```
