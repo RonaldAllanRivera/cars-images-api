@@ -16,7 +16,9 @@ class CorsTest extends ApiTestCase
 
     public function test_nothing_is_allowed_until_an_origin_is_configured(): void
     {
-        $this->assertSame([], config('cors.allowed_origins'));
+        config(['cors.allowed_origins' => []]);
+
+        $this->preflight(self::ORIGIN)->assertHeaderMissing('Access-Control-Allow-Origin');
     }
 
     public function test_the_configured_origin_gets_cors_headers(): void
@@ -38,7 +40,6 @@ class CorsTest extends ApiTestCase
         // origin and lets the browser refuse any other page. Absent or equal to
         // the configured origin are both refusals; echoing the caller's origin
         // would be the leak.
-        $this->assertNotSame('https://evil.example', $header);
         $this->assertContains($header, [null, self::ORIGIN]);
     }
 }

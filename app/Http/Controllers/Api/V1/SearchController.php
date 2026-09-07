@@ -88,7 +88,11 @@ class SearchController extends Controller
                 'message' => 'Wikimedia is rate-limiting this server. Try again later.',
                 'retry_after_seconds' => $e->retryAfterSeconds,
             ])->withHeaders(array_filter(['Retry-After' => $e->retryAfterSeconds]));
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            // The action already wrote an error_events row; report() gets the
+            // trace into laravel.log too, for the case where that write failed.
+            report($e);
+
             return $this->searchResponse($search, 502, [
                 'message' => 'The search failed. The reason is in the error log.',
             ]);

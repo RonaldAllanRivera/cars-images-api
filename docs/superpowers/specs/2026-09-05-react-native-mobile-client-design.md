@@ -349,7 +349,8 @@ if they run out: `eas build --local` on the Actions runner.
    touch production.
 2. A Laravel-only commit runs `ci-cd.yml` and **does not** start `mobile.yml`.
 3. `POST /api/v1/auth/login` returns a scoped bearer token; a request with a
-   revoked or ability-less token is rejected `403`.
+   revoked or missing token is rejected `401`, and one whose token lacks the
+   required ability is rejected `403`.
 4. `POST /api/v1/searches` rejects a span over 3 years or `images_per_year`
    over 5, and otherwise returns a completed run with its images.
 5. `PATCH /api/v1/images/{id}/review` sets `review_status`, `reviewed_by` and

@@ -41,6 +41,8 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- The CORS tests set their own origins; a developer's or CI's .env must not leak in. -->
+        <env name="CORS_ALLOWED_ORIGINS" value=""/>
         <!--
             Wikimedia retry/backoff, pinned for the test suite.
             The real .env uses 5 retries with a 2000ms exponential base, which

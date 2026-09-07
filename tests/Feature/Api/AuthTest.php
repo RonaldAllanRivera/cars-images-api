@@ -61,6 +61,14 @@ class AuthTest extends ApiTestCase
         $this->getJson('/api/v1/auth/me')->assertUnauthorized();
     }
 
+    public function test_a_request_without_a_json_accept_header_still_gets_a_json_401(): void
+    {
+        $this->get('/api/v1/auth/me')
+            ->assertUnauthorized()
+            ->assertHeader('Content-Type', 'application/json')
+            ->assertJsonPath('message', 'Unauthenticated.');
+    }
+
     public function test_me_returns_the_user_behind_a_real_bearer_token(): void
     {
         $user = User::factory()->create();

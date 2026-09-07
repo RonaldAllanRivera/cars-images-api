@@ -20,7 +20,7 @@ return [
     'allowed_methods' => ['*'],
 
     /*
-    | Comma-separated in CORS_ALLOWED_ORIGINS. Empty by default: the mobile
+    | Comma-separated in CORS_ALLOWED_ORIGINS. Empty when CORS_ALLOWED_ORIGINS is unset: the mobile
     | app's web build runs on its own origin (Netlify), and that is the only
     | browser that should be talking to api/*. The native build sends no
     | Origin header and is unaffected.
@@ -36,7 +36,9 @@ return [
 
     'exposed_headers' => [],
 
-    'max_age' => 0,
+    // Authorization makes every request non-simple, so each one preflights;
+    // caching the answer for an hour halves the web build's requests.
+    'max_age' => 3600,
 
     'supports_credentials' => false,
 
