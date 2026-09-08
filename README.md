@@ -151,6 +151,12 @@ The web build reads its API origin from `EXPO_PUBLIC_API_URL`, inlined at build
 time. Production must list the deployed web origin in `CORS_ALLOWED_ORIGINS` or
 the browser blocks every request.
 
+**Setting Netlify up for the first time, or debugging a deploy?** See
+[`docs/netlify-deploy.md`](docs/netlify-deploy.md) — it covers the one-time
+setup, why the Git repository is deliberately *not* linked to Netlify, and the
+specific failure modes worth recognising (a blank page means the CSP, a silent
+sign-in failure means CORS).
+
 ---
 
 ## Engineering notes
