@@ -1,16 +1,18 @@
 import { Image } from 'expo-image';
 import { Pressable, Text, View } from 'react-native';
 
-import { useImages } from '@/api/hooks/useImages';
 import { useReviewImage } from '@/api/hooks/useReviewImage';
+import { useReviewQueueImages } from '@/api/hooks/useReviewQueueImages';
 import type { Image as CarImage } from '@/api/schemas';
 import { ErrorBanner } from '@/ui/ErrorBanner';
 import { InfiniteGrid } from '@/ui/InfiniteGrid';
 import { Screen } from '@/ui/Screen';
 
 export default function ReviewQueue() {
-  // The queue is exactly the images no human has ruled on yet.
-  const query = useImages({ review_status: 'pending' });
+  // The queue is exactly the images no human has ruled on yet - and stays
+  // that way the instant a verdict lands, not just after the next refetch:
+  // see useReviewQueueImages for why the filtering has to happen here.
+  const query = useReviewQueueImages();
   const review = useReviewImage();
 
   return (
@@ -24,7 +26,7 @@ export default function ReviewQueue() {
         <ErrorBanner
           message={
             review.error instanceof Error
-              ? `${review.error.message} The card has been put back.`
+              ? `${review.error.message}. The card has been put back.`
               : 'The verdict could not be saved. The card has been put back.'
           }
         />
