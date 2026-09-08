@@ -28,8 +28,10 @@ export default function AppLayout() {
         tabBarInactiveTintColor: '#94a3b8',
       }}
     >
-      <Tabs.Screen name="search" options={{ title: 'Search' }} />
-      <Tabs.Screen name="runs" options={{ title: 'Runs' }} />
+      {/* headerShown: false - this tab nests a Stack, which owns the header. */}
+      <Tabs.Screen name="search" options={{ title: 'Search', headerShown: false }} />
+      {/* headerShown: false - this tab nests a Stack, which owns the header. */}
+      <Tabs.Screen name="runs" options={{ title: 'Runs', headerShown: false }} />
       <Tabs.Screen name="review" options={{ title: 'Review' }} />
       <Tabs.Screen name="health" options={{ title: 'Health' }} />
     </Tabs>
