@@ -6,6 +6,7 @@ import { useReviewQueueImages } from '@/api/hooks/useReviewQueueImages';
 import type { Image as CarImage } from '@/api/schemas';
 import { ErrorBanner } from '@/ui/ErrorBanner';
 import { InfiniteGrid } from '@/ui/InfiniteGrid';
+import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
 
 export default function ReviewQueue() {
@@ -17,6 +18,7 @@ export default function ReviewQueue() {
 
   return (
     <Screen>
+      <PageTitle title="Review queue - Cars Images" />
       <Text className="mb-1 text-xl font-bold text-white">Review queue</Text>
       <Text className="mb-3 text-sm text-slate-400">
         Your verdict is recorded separately from the machine&apos;s, so both stay comparable.

@@ -5,6 +5,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useSearches } from '@/api/hooks/useSearches';
 import type { SearchStatus } from '@/api/schemas';
 import { InfiniteGrid } from '@/ui/InfiniteGrid';
+import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
 import { StatusBadge } from '@/ui/StatusBadge';
 
@@ -16,6 +17,7 @@ export default function Runs() {
 
   return (
     <Screen>
+      <PageTitle title="Runs - Cars Images" />
       <View className="mb-3 flex-row flex-wrap gap-2">
         {STATUSES.map((option) => (
           <Pressable

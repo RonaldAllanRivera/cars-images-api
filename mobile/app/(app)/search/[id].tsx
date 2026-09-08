@@ -4,6 +4,7 @@ import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
 import { useImage } from '@/api/hooks/useImages';
 import { ErrorBanner } from '@/ui/ErrorBanner';
+import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
 import { StatusBadge } from '@/ui/StatusBadge';
 
@@ -25,6 +26,7 @@ export default function ImageDetail() {
   if (query.isLoading) {
     return (
       <Screen>
+        <PageTitle title="Image - Cars Images" />
         <ActivityIndicator className="mt-8" color="#38bdf8" />
       </Screen>
     );
@@ -33,6 +35,7 @@ export default function ImageDetail() {
   if (query.isError || !query.data) {
     return (
       <Screen>
+        <PageTitle title="Image - Cars Images" />
         <ErrorBanner message={query.error instanceof Error ? query.error.message : 'Not found.'} />
       </Screen>
     );
@@ -42,6 +45,7 @@ export default function ImageDetail() {
 
   return (
     <Screen>
+      <PageTitle title="Image - Cars Images" />
       <ScrollView>
         <Image
           source={image.source_url}

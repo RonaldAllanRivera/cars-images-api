@@ -1,21 +1,31 @@
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from 'react-native';
 
 import { ApiValidationError } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import { ErrorBanner } from '@/ui/ErrorBanner';
+import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
 
 /** Names the token so a lost device can be revoked without rotating the rest. */
 const DEVICE_NAME = Platform.select({ web: 'web', android: 'android', ios: 'ios' }) ?? 'unknown';
 
 export default function Login() {
-  const { signIn } = useAuth();
+  const { signIn, status } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // After every hook, so the early return cannot reorder them. A signed-in
+  // visitor reaching this screen - from the landing page, or a bookmark -
+  // would otherwise sign in again and mint a second Sanctum token under the
+  // same device name, which is exactly what naming tokens per device is
+  // meant to avoid.
+  if (status === 'authenticated') {
+    return <Redirect href="/(app)/search" />;
+  }
 
   const submit = async () => {
     setBusy(true);
@@ -39,6 +49,7 @@ export default function Login() {
 
   return (
     <Screen>
+      <PageTitle title="Sign in - Cars Images" />
       <View className="flex-1 justify-center gap-3">
         <Text className="mb-2 text-2xl font-bold text-white">Sign in</Text>
 

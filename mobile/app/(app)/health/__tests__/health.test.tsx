@@ -22,6 +22,8 @@ const wrapper = ({ children }: { children: ReactNode }) => {
 };
 
 describe('<Health />', () => {
+  beforeEach(() => jest.restoreAllMocks());
+
   it('renders the counters and the error log', async () => {
     jest.spyOn(client, 'apiRequest').mockImplementation((path) =>
       Promise.resolve(path === '/health/summary' ? healthFixture : errorsFixture),
@@ -49,5 +51,54 @@ describe('<Health />', () => {
     // This message string is unique to the logged event, so it only exists
     // if useErrors actually resolved and the log rendered it.
     expect(screen.getByText('The search run failed.')).toBeTruthy();
+  });
+
+  it('does not call the log empty while it is still loading', async () => {
+    // The empty-log line is guarded by a compound condition
+    // (`!isLoading && !isError && length === 0`), and the tempting tidy-up is
+    // to reduce it to `events.length === 0`. That reads "nothing logged" over
+    // a log that has not arrived yet, and over one that failed to arrive at
+    // all - the same swallowed-failure shape already fixed in InfiniteGrid.
+    jest
+      .spyOn(client, 'apiRequest')
+      .mockImplementation((path) =>
+        path === '/health/summary' ? Promise.resolve(healthFixture) : new Promise(() => {}),
+      );
+
+    render(<Health />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('completed')).toBeTruthy());
+    expect(screen.queryByText('Nothing logged.')).toBeNull();
+  });
+
+  it('shows the failure instead of calling the log empty when it cannot be read', async () => {
+    jest
+      .spyOn(client, 'apiRequest')
+      .mockImplementation((path) =>
+        path === '/health/summary'
+          ? Promise.resolve(healthFixture)
+          : Promise.reject(new client.ApiError(500, 'The error log is unavailable (500).')),
+      );
+
+    render(<Health />, { wrapper });
+
+    await waitFor(() =>
+      expect(screen.getByText('The error log is unavailable (500).')).toBeTruthy(),
+    );
+    expect(screen.queryByText('Nothing logged.')).toBeNull();
+  });
+
+  it('says so when the log really is empty', async () => {
+    jest.spyOn(client, 'apiRequest').mockImplementation((path) =>
+      Promise.resolve(
+        path === '/health/summary'
+          ? healthFixture
+          : { ...errorsFixture, data: [] },
+      ),
+    );
+
+    render(<Health />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Nothing logged.')).toBeTruthy());
   });
 });

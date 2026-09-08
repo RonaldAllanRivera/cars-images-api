@@ -44,6 +44,23 @@ describe('useAuth', () => {
     expect(await tokenStore.get()).toBeNull();
   });
 
+  it('keeps a stored token when the check fails for any reason but a 401', async () => {
+    await tokenStore.set('stored-token');
+    jest
+      .spyOn(client, 'apiRequest')
+      .mockRejectedValueOnce(new TypeError('Network request failed'));
+
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => expect(result.current.status).toBe('anonymous'));
+
+    // Offline, a 500, or a CORS origin the server does not allow all land in
+    // the same catch. Throwing the token away for those signs the user out
+    // permanently for a transient failure - which on native defeats the
+    // point of storing it in SecureStore at all.
+    expect(await tokenStore.get()).toBe('stored-token');
+  });
+
   it('stores the token on a successful sign-in', async () => {
     jest.spyOn(client, 'apiRequest').mockResolvedValueOnce({
       token: 'fresh-token',

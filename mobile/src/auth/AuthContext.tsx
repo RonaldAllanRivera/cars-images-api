@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { apiRequest, configureApiClient } from '../api/client';
+import { ApiError, apiRequest, configureApiClient } from '../api/client';
 import { LoginResponseSchema, single, UserSchema } from '../api/schemas';
 import type { User } from '../api/schemas';
 import { tokenStore } from './TokenStore';
@@ -70,13 +70,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setUser(me.data);
         setStatus('authenticated');
-      } catch {
-        // Revoked, expired, or the server is unreachable. Either way there
-        // is nothing to show behind the guard.
+      } catch (caught) {
         if (cancelled) return;
 
-        tokenRef.current = null;
-        await tokenStore.clear();
+        // Only a 401 means the token is dead. Offline, a 500, or a CORS
+        // origin the server does not allow all land here too, and throwing
+        // the token away for those signs the user out permanently for a
+        // transient failure - which on native defeats the point of storing
+        // it in SecureStore at all. Keep it and stay anonymous for now.
+        if (caught instanceof ApiError && caught.status === 401) {
+          tokenRef.current = null;
+          await tokenStore.clear();
+        }
+
         setStatus('anonymous');
       }
     };

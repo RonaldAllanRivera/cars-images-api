@@ -5,6 +5,7 @@ import { useImages } from '@/api/hooks/useImages';
 import type { ReviewStatus } from '@/api/schemas';
 import { ImageCard } from '@/ui/ImageCard';
 import { InfiniteGrid } from '@/ui/InfiniteGrid';
+import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
 
 const STATUSES: (ReviewStatus | 'all')[] = ['all', 'pending', 'approved', 'rejected'];
@@ -32,9 +33,14 @@ export default function ImageGrid() {
 
   return (
     <Screen>
+      <PageTitle title="All images - Cars Images" />
+      {/* An exact match, not a search: ListImagesRequest::apply() does
+          `where('make', ...)`, so "Toy" - and every other prefix - matches
+          nothing. The placeholder and the empty hint have to say so, or the
+          screen reads as broken. */}
       <TextInput
         className="mb-3 rounded-lg bg-slate-800 px-4 py-3 text-white"
-        placeholder="Filter by make"
+        placeholder="Exact make, e.g. Toyota"
         placeholderTextColor="#94a3b8"
         value={make}
         onChangeText={setMake}
@@ -65,7 +71,7 @@ export default function ImageGrid() {
           />
         )}
         emptyTitle="No images match"
-        emptyHint="Try a different make, or run a new search."
+        emptyHint="The make must match exactly - 'Toyota', not 'Toy'. Check the spelling, or run a new search."
       />
     </Screen>
   );

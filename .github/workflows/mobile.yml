@@ -76,8 +76,17 @@ jobs:
 
       # EXPO_PUBLIC_API_URL is inlined into the bundle here. There is no
       # runtime config file, so this value is baked into what ships.
+      #
+      # The guard is not belt-and-braces: an unset `vars.*` renders as an
+      # empty string, `client.ts` reads it with `??` (which does not treat
+      # `""` as absent), and `new URL('/api/v1/images', "")` then throws on
+      # every request. Without this the deploy stays green and ships a site
+      # where nothing loads - so fail here instead. Setting the value as a
+      # *secret* rather than a *variable* produces exactly that.
       - name: Export web build
-        run: npm run build:web
+        run: |
+          test -n "$EXPO_PUBLIC_API_URL" || { echo "::error::EXPO_PUBLIC_API_URL repository variable is not set"; exit 1; }
+          npm run build:web
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
 

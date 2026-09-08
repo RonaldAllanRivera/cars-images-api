@@ -2,6 +2,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 
 import { useAuth } from '@/auth/AuthContext';
+import { PageTitle } from '@/ui/PageTitle';
 
 export default function AppLayout() {
   const { status } = useAuth();
@@ -9,6 +10,11 @@ export default function AppLayout() {
   if (status === 'loading') {
     return (
       <View className="flex-1 items-center justify-center bg-slate-900">
+        {/* The static export renders this branch for every route behind the
+            guard - whether there is a session is only knowable in the
+            browser - so without a title here those pages ship a blank tab.
+            Each screen's own <PageTitle> replaces it once it mounts. */}
+        <PageTitle title="Cars Images" />
         <ActivityIndicator color="#38bdf8" />
       </View>
     );

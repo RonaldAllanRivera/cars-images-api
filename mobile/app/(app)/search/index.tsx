@@ -9,6 +9,7 @@ import {
   useCreateSearch,
 } from '@/api/hooks/useCreateSearch';
 import { ErrorBanner } from '@/ui/ErrorBanner';
+import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
 
 export default function SearchForm() {
@@ -95,6 +96,7 @@ export default function SearchForm() {
 
   return (
     <Screen>
+      <PageTitle title="New search - Cars Images" />
       <ScrollView contentContainerClassName="gap-3">
         <Text className="text-xl font-bold text-white">New search</Text>
         <Text className="text-sm text-slate-400">

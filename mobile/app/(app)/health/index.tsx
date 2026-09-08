@@ -4,6 +4,7 @@ import { useErrors } from '@/api/hooks/useErrors';
 import { useHealth } from '@/api/hooks/useHealth';
 import { useAuth } from '@/auth/AuthContext';
 import { ErrorBanner } from '@/ui/ErrorBanner';
+import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
 import { StatTile } from '@/ui/StatTile';
 
@@ -25,6 +26,7 @@ export default function Health() {
 
   return (
     <Screen>
+      <PageTitle title="Pipeline health - Cars Images" />
       <ScrollView>
         <Text className="mb-3 text-xl font-bold text-white">Pipeline health</Text>
 

@@ -6,6 +6,7 @@ import { useSearch } from '@/api/hooks/useSearches';
 import { ErrorBanner } from '@/ui/ErrorBanner';
 import { ImageCard } from '@/ui/ImageCard';
 import { InfiniteGrid } from '@/ui/InfiniteGrid';
+import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
 import { StatusBadge } from '@/ui/StatusBadge';
 
@@ -18,6 +19,7 @@ export default function RunDetail() {
   if (search.isLoading) {
     return (
       <Screen>
+        <PageTitle title="Run - Cars Images" />
         <ActivityIndicator className="mt-8" color="#38bdf8" />
       </Screen>
     );
@@ -28,6 +30,7 @@ export default function RunDetail() {
   if (search.isError) {
     return (
       <Screen>
+        <PageTitle title="Run - Cars Images" />
         <ErrorBanner
           message={search.error instanceof Error ? search.error.message : 'Not found.'}
         />
@@ -37,6 +40,7 @@ export default function RunDetail() {
 
   return (
     <Screen>
+      <PageTitle title="Run - Cars Images" />
       {search.data ? (
         <View className="mb-3">
           <Text className="text-lg font-bold text-white">
