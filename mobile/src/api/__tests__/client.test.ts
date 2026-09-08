@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-import { ApiError, apiRequest, ApiValidationError, configureApiClient } from '../client';
+import {
+  ApiError,
+  apiRequest,
+  apiRequestRaw,
+  ApiValidationError,
+  configureApiClient,
+} from '../client';
 
 const json = (body: unknown, status = 200) =>
   Promise.resolve(
@@ -108,5 +114,48 @@ describe('apiRequest', () => {
       .mockReturnValueOnce(Promise.resolve(new Response(null, { status: 204 })));
 
     await expect(apiRequest('/auth/logout', { method: 'POST' })).resolves.toBeUndefined();
+  });
+});
+
+describe('apiRequestRaw', () => {
+  let onUnauthorized: jest.Mock;
+
+  beforeEach(() => {
+    onUnauthorized = jest.fn();
+    configureApiClient({ onUnauthorized, getToken: () => 'test-token' });
+    global.fetch = jest.fn();
+  });
+
+  it('returns the status alongside the body for an accepted error status', async () => {
+    // POST /searches answers 503 with a real search row. Throwing here would
+    // lose the run the user is entitled to be linked to.
+    jest
+      .mocked(global.fetch)
+      .mockReturnValueOnce(json({ message: 'Rate limited.', data: { id: 7 } }, 503));
+
+    await expect(
+      apiRequestRaw('/searches', { method: 'POST', body: {}, acceptStatuses: [503, 502] }),
+    ).resolves.toEqual({ status: 503, body: { message: 'Rate limited.', data: { id: 7 } } });
+  });
+
+  it('still throws for a status the caller did not list', async () => {
+    // 422 is deliberately absent from acceptStatuses: a rejected cap is an
+    // error the form must surface, not an outcome to render.
+    jest.mocked(global.fetch).mockReturnValueOnce(
+      json({ message: 'The given data was invalid.', errors: { to_year: ['Too wide.'] } }, 422),
+    );
+
+    await expect(
+      apiRequestRaw('/searches', { method: 'POST', body: {}, acceptStatuses: [503, 502] }),
+    ).rejects.toBeInstanceOf(ApiValidationError);
+  });
+
+  it('signs the user out on a 401 through the same single path', async () => {
+    jest.mocked(global.fetch).mockReturnValueOnce(json({ message: 'Unauthenticated.' }, 401));
+
+    await expect(
+      apiRequestRaw('/searches', { method: 'POST', body: {}, acceptStatuses: [503, 502] }),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 });

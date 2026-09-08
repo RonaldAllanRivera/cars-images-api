@@ -120,6 +120,40 @@ export async function apiRequest<T = unknown>(
   return parsed.data;
 }
 
+/**
+ * Like apiRequest, but hands back the status alongside the body and does not
+ * throw for the caller's listed statuses.
+ *
+ * POST /searches answers 201, 200, 503 and 502 with a real search row in
+ * every case; only the caller knows that a 503 there is information, not a
+ * failure. A 401 still signs the user out.
+ */
+export async function apiRequestRaw(
+  path: string,
+  options: RequestOptions<unknown> & { acceptStatuses: number[] },
+): Promise<{ status: number; body: unknown }> {
+  const { method = 'GET', body, query, acceptStatuses } = options;
+  const token = config.getToken();
+
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+
+  const response = await fetch(buildUrl(path, query), {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  const payload: unknown = await response.json().catch(() => undefined);
+
+  if (!response.ok && !acceptStatuses.includes(response.status)) {
+    throw toError(response.status, payload, config);
+  }
+
+  return { status: response.status, body: payload };
+}
+
 function toError(status: number, payload: unknown, current: ClientConfig): ApiError {
   if (status === 401) {
     // The single place a dead token signs the user out. A 403 must NOT do
