@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Cars Images",
+    "slug": "cars-images",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "carsimages",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.carsimages.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

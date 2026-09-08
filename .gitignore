@@ -57,3 +57,4 @@ deploy-secrets.local.txt
 /mobile/dist
 /mobile/android
 /mobile/ios
+/mobile/.env
