@@ -150,6 +150,19 @@ describe('apiRequestRaw', () => {
     ).rejects.toBeInstanceOf(ApiValidationError);
   });
 
+  it('handles a 204 the same way apiRequest does', async () => {
+    // Before send() was shared, this path called response.json() on a bodyless
+    // 204, which rejects and was swallowed by the .catch - the divergence that
+    // motivated the extraction.
+    jest
+      .mocked(global.fetch)
+      .mockReturnValueOnce(Promise.resolve(new Response(null, { status: 204 })));
+
+    await expect(
+      apiRequestRaw('/searches/1', { method: 'DELETE', acceptStatuses: [] }),
+    ).resolves.toEqual({ status: 204, body: undefined });
+  });
+
   it('signs the user out on a 401 through the same single path', async () => {
     jest.mocked(global.fetch).mockReturnValueOnce(json({ message: 'Unauthenticated.' }, 401));
 

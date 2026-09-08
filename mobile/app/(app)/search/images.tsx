@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { useImages } from '@/api/hooks/useImages';
@@ -11,10 +11,22 @@ const STATUSES: (ReviewStatus | 'all')[] = ['all', 'pending', 'approved', 'rejec
 
 export default function ImageGrid() {
   const [make, setMake] = useState('');
+  const [debouncedMake, setDebouncedMake] = useState('');
   const [status, setStatus] = useState<ReviewStatus | 'all'>('all');
 
+  // The raw input drives the field; only the settled value drives the query.
+  // Without this every keystroke is a new query key with no cached data, so
+  // the list tears down to a spinner and refetches once per character - and
+  // every authenticated route shares one rate-limit bucket per user, so the
+  // burst can throttle endpoints this screen never touches.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedMake(make), 300);
+
+    return () => clearTimeout(timer);
+  }, [make]);
+
   const query = useImages({
-    make: make.trim() || undefined,
+    make: debouncedMake.trim() || undefined,
     review_status: status === 'all' ? undefined : status,
   });
 
@@ -46,7 +58,12 @@ export default function ImageGrid() {
         query={query}
         numColumns={2}
         keyExtractor={(image) => String(image.id)}
-        renderItem={(image) => <ImageCard image={image} />}
+        renderItem={(image) => (
+          <ImageCard
+            image={image}
+            href={{ pathname: '/(app)/search/[id]', params: { id: image.id } }}
+          />
+        )}
         emptyTitle="No images match"
         emptyHint="Try a different make, or run a new search."
       />

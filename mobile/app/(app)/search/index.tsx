@@ -19,10 +19,14 @@ export default function SearchForm() {
   const [toYear, setToYear] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // The run behind a blocked/failed notice, so the banner can link to it
+  // without navigating away from the message the user has to read.
+  const [noticeRunId, setNoticeRunId] = useState<number | null>(null);
 
   const submit = async () => {
     setError(null);
     setNotice(null);
+    setNoticeRunId(null);
 
     const from = Number(fromYear);
     const to = Number(toYear);
@@ -58,18 +62,25 @@ export default function SearchForm() {
         images_per_year: MAX_IMAGES_PER_YEAR,
       });
 
-      if (result.outcome === 'blocked') {
+      if (result.outcome === 'blocked' || result.outcome === 'failed') {
         setNotice(
-          `${result.message ?? 'Wikimedia is rate-limiting this server.'}${
-            result.retryAfterSeconds ? ` Try again in ${result.retryAfterSeconds}s.` : ''
-          }`,
+          result.outcome === 'blocked'
+            ? `${result.message ?? 'Wikimedia is rate-limiting this server.'}${
+                result.retryAfterSeconds ? ` Try again in ${result.retryAfterSeconds}s.` : ''
+              }`
+            : (result.message ?? 'The search failed. The reason is in the error log.'),
         );
-      } else if (result.outcome === 'failed') {
-        setNotice(result.message ?? 'The search failed. The reason is in the error log.');
+
+        // Every outcome produced a real run row, so the user keeps a link to
+        // it - but navigating now would cover the notice before it is read,
+        // and the run screen only knows the row is `failed`, not that
+        // Wikimedia is throttling or for how long. So: stay, and offer the
+        // link.
+        setNoticeRunId(result.search.id);
+
+        return;
       }
 
-      // Every outcome produced a real run row, so the user always gets a
-      // link to it - including the ones that failed.
       router.push({ pathname: '/(app)/runs/[id]', params: { id: result.search.id } });
     } catch (caught) {
       setError(
@@ -95,6 +106,16 @@ export default function SearchForm() {
         {notice ? (
           <View className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
             <Text className="text-sm text-amber-200">{notice}</Text>
+            {noticeRunId !== null ? (
+              <Pressable
+                className="mt-2 self-start"
+                onPress={() =>
+                  router.push({ pathname: '/(app)/runs/[id]', params: { id: noticeRunId } })
+                }
+              >
+                <Text className="text-sm font-semibold text-sky-400">View the run</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
 

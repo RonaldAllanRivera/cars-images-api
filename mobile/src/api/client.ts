@@ -72,11 +72,16 @@ interface RequestOptions<T> {
   schema?: z.ZodType<T>;
 }
 
-export async function apiRequest<T = unknown>(
+/**
+ * The one place a request is built and sent. Both public entry points below
+ * share it so the auth header, the URL building and the 204 handling cannot
+ * drift apart; each of them owns only what it does with the answer.
+ */
+async function send(
   path: string,
-  options: RequestOptions<T> = {},
-): Promise<T> {
-  const { method = 'GET', body, query, schema } = options;
+  options: Omit<RequestOptions<unknown>, 'schema'>,
+): Promise<{ response: Response; payload: unknown }> {
+  const { method = 'GET', body, query } = options;
   const token = config.getToken();
 
   const headers: Record<string, string> = { Accept: 'application/json' };
@@ -89,11 +94,24 @@ export async function apiRequest<T = unknown>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
+  // A 204 carries no body at all, so response.json() would reject. Reading it
+  // here keeps every caller from having to remember that.
+  const payload: unknown =
+    response.status === 204 ? undefined : await response.json().catch(() => undefined);
+
+  return { response, payload };
+}
+
+export async function apiRequest<T = unknown>(
+  path: string,
+  options: RequestOptions<T> = {},
+): Promise<T> {
+  const { schema } = options;
+  const { response, payload } = await send(path, options);
+
   if (response.status === 204) {
     return undefined as T;
   }
-
-  const payload: unknown = await response.json().catch(() => undefined);
 
   if (!response.ok) {
     throw toError(response.status, payload, config);
@@ -130,22 +148,12 @@ export async function apiRequest<T = unknown>(
  */
 export async function apiRequestRaw(
   path: string,
-  options: RequestOptions<unknown> & { acceptStatuses: number[] },
+  // `schema` is omitted rather than inherited: this function never applies
+  // one, so accepting it would silently skip validation a caller asked for.
+  options: Omit<RequestOptions<unknown>, 'schema'> & { acceptStatuses: number[] },
 ): Promise<{ status: number; body: unknown }> {
-  const { method = 'GET', body, query, acceptStatuses } = options;
-  const token = config.getToken();
-
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-
-  const response = await fetch(buildUrl(path, query), {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-
-  const payload: unknown = await response.json().catch(() => undefined);
+  const { acceptStatuses } = options;
+  const { response, payload } = await send(path, options);
 
   if (!response.ok && !acceptStatuses.includes(response.status)) {
     throw toError(response.status, payload, config);

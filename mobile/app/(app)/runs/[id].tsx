@@ -3,6 +3,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 
 import { useSearchImages } from '@/api/hooks/useImages';
 import { useSearch } from '@/api/hooks/useSearches';
+import { ErrorBanner } from '@/ui/ErrorBanner';
 import { ImageCard } from '@/ui/ImageCard';
 import { InfiniteGrid } from '@/ui/InfiniteGrid';
 import { Screen } from '@/ui/Screen';
@@ -18,6 +19,18 @@ export default function RunDetail() {
     return (
       <Screen>
         <ActivityIndicator className="mt-8" color="#38bdf8" />
+      </Screen>
+    );
+  }
+
+  // Matches search/[id].tsx: a failed lookup must say so rather than render a
+  // headerless screen over an empty grid.
+  if (search.isError) {
+    return (
+      <Screen>
+        <ErrorBanner
+          message={search.error instanceof Error ? search.error.message : 'Not found.'}
+        />
       </Screen>
     );
   }
@@ -46,6 +59,8 @@ export default function RunDetail() {
         query={images}
         numColumns={2}
         keyExtractor={(image) => String(image.id)}
+        // No href: the runs stack has no image-detail route, and linking to
+        // the one in the search stack would switch tabs mid-flow.
         renderItem={(image) => <ImageCard image={image} />}
         emptyTitle="This run returned no images"
       />
