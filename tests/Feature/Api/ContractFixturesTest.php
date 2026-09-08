@@ -6,8 +6,10 @@ use App\Models\CarImage;
 use App\Auth\TokenAbilities;
 use App\Models\ErrorEvent;
 use App\Models\User;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 
 /**
@@ -38,6 +40,16 @@ class ContractFixturesTest extends ApiTestCase
         // Frozen so every timestamp in the fixtures is byte-stable; with
         // RefreshDatabase restarting ids at 1, a diff means a real change.
         $this->travelTo(Carbon::parse('2026-01-15 09:00:00'));
+
+        // Every numeric `throttle:N,1` here shares ONE cache key once a user
+        // is authenticated - Laravel's default ThrottleRequests signature is
+        // sha1($user->id) alone, not the route, so all eleven authenticated
+        // calls below count against whichever limit is smallest (10, on the
+        // search:write routes) regardless of which endpoint they hit. That is
+        // abuse protection, not part of the API contract this test pins, so
+        // it is switched off for this capture rather than making the fixture
+        // count fragile against the request-throttle numbers.
+        $this->withoutMiddleware(ThrottleRequests::class);
 
         $fixtures = $this->buildFixtures();
 
@@ -117,6 +129,10 @@ class ContractFixturesTest extends ApiTestCase
         // each other.
         Sanctum::actingAs($user, TokenAbilities::all());
 
+        // Only the search-create fixture below reaches Wikimedia; every other
+        // fixture request is served from the database and never touches HTTP.
+        $this->fakeWikimediaSearchResults();
+
         return [
             'login' => $this->loginPayload(),
             'me' => $this->getJson('/api/v1/auth/me')->assertOk()->json(),
@@ -134,7 +150,56 @@ class ContractFixturesTest extends ApiTestCase
             'review' => $this->patchJson("/api/v1/images/{$pending->id}/review", [
                 'review_status' => CarImage::REVIEW_REJECTED,
             ])->assertOk()->json(),
+            // The one endpoint whose 201 populates `images`: SearchController
+            // loads the relation only on the create-success path, so this is
+            // the only fixture that can exercise ImageSchema nested inside a
+            // populated SearchSchema.images array rather than as .optional().
+            'search-create' => $this->postJson('/api/v1/searches', [
+                'make' => 'Honda',
+                'model' => 'CR-V',
+                'from_year' => 1997,
+                'to_year' => 1997,
+                'images_per_year' => 2,
+            ])->assertCreated()->json(),
         ];
+    }
+
+    /**
+     * Fakes the two Commons endpoints RunSearchQueryAction calls for a fresh
+     * search: the category probe (any `titles` request resolves) and the file
+     * listing (one file, its title naming the search year so ModelYearMatcher
+     * keeps it). Deterministic and offline - no live network call is made.
+     */
+    private function fakeWikimediaSearchResults(): void
+    {
+        Http::fake(function ($request) {
+            $data = $request->data();
+
+            if (isset($data['titles'])) {
+                return Http::response(['query' => ['pages' => [[
+                    'title' => $data['titles'],
+                    'pageid' => 1,
+                    'categoryinfo' => ['files' => 1, 'subcats' => 0],
+                ]]]], 200);
+            }
+
+            return Http::response(['query' => ['pages' => [[
+                'pageid' => 501,
+                'title' => 'File:1997 Honda CR-V LX.jpg',
+                'imageinfo' => [[
+                    'url' => 'https://upload.wikimedia.org/fixture-create.jpg',
+                    'thumburl' => 'https://upload.wikimedia.org/thumb/fixture-create.jpg',
+                    'width' => 1024,
+                    'height' => 768,
+                    'mime' => 'image/jpeg',
+                    'extmetadata' => [
+                        'LicenseShortName' => ['value' => 'CC BY-SA 4.0'],
+                        'Artist' => ['value' => 'Fixture Photographer'],
+                        'ImageDescription' => ['value' => 'A 1997 Honda CR-V, photographed for the fixtures.'],
+                    ],
+                ]],
+            ]]]], 200);
+        });
     }
 
     /**

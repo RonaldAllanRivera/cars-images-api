@@ -6,6 +6,7 @@ import loginFixture from '../__fixtures__/login.json';
 import meFixture from '../__fixtures__/me.json';
 import reviewFixture from '../__fixtures__/review.json';
 import searchFixture from '../__fixtures__/search.json';
+import searchCreateFixture from '../__fixtures__/search-create.json';
 import searchesFixture from '../__fixtures__/searches.json';
 import validationErrorFixture from '../__fixtures__/validation-error.json';
 import {
@@ -34,6 +35,16 @@ describe('the API contract', () => {
     expect(single(ImageSchema).parse(reviewFixture).data.review_status).toBe('rejected');
     expect(single(SearchSchema).parse(searchFixture).data.status).toBe('completed');
     expect(single(HealthSummarySchema).parse(healthFixture).data.errors_last_24h).toBeGreaterThanOrEqual(0);
+  });
+
+  it('parses a successful POST /searches response with its populated images array', () => {
+    const created = single(SearchSchema).parse(searchCreateFixture).data;
+
+    // This is the one response where `images` is loaded rather than absent,
+    // so it is the only fixture that exercises ImageSchema nested inside a
+    // populated array instead of through the `.optional()` branch alone.
+    expect(created.images?.length).toBeGreaterThan(0);
+    expect(created.images?.[0]?.review_status).toBe('pending');
   });
 
   it('parses the cursor-paginated collections', () => {

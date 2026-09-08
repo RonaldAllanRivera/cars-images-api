@@ -23,6 +23,10 @@ export const ErrorContextSchema = z.enum([
 ]);
 export type ErrorContext = z.infer<typeof ErrorContextSchema>;
 
+/** ListErrorsRequest validates severity against exactly these two values. */
+export const ErrorSeveritySchema = z.enum(['error', 'warning']);
+export type ErrorSeverity = z.infer<typeof ErrorSeveritySchema>;
+
 export const TokenAbilitySchema = z.enum([
   'search:read',
   'search:write',
@@ -76,7 +80,8 @@ export const SearchSchema = z.object({
   images_per_year: z.number().int(),
   status: SearchStatusSchema,
   csv_import_id: z.number().int().nullable(),
-  requested_by: z.number().int().nullable(),
+  // The migration declares this column NOT NULL - every search has a creator.
+  requested_by: z.number().int(),
   // whenCounted / whenLoaded: present only on the endpoints that add them.
   images_count: z.number().int().optional(),
   images: z.array(ImageSchema).optional(),
@@ -88,7 +93,7 @@ export type Search = z.infer<typeof SearchSchema>;
 export const ErrorEventSchema = z.object({
   id: z.number().int(),
   context: ErrorContextSchema,
-  severity: z.string(),
+  severity: ErrorSeveritySchema,
   message: z.string().nullable(),
   exception_class: z.string().nullable(),
   exception_message: z.string().nullable(),
