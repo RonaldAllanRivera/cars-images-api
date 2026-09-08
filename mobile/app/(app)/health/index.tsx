@@ -64,7 +64,15 @@ export default function Health() {
 
         <Text className="mb-2 text-xs uppercase tracking-wide text-slate-500">Error log</Text>
 
-        {events.length === 0 ? (
+        {errors.isError ? (
+          <ErrorBanner
+            message={errors.error instanceof Error ? errors.error.message : 'Error log unavailable.'}
+          />
+        ) : null}
+
+        {errors.isLoading ? <ActivityIndicator color="#38bdf8" /> : null}
+
+        {!errors.isLoading && !errors.isError && events.length === 0 ? (
           <Text className="mb-4 text-sm text-slate-400">Nothing logged.</Text>
         ) : (
           events.map((event) => (

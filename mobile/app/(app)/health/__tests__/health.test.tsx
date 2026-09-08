@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { render, screen, waitFor, within } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 import errorsFixture from '@/api/__fixtures__/errors.json';
@@ -31,11 +31,23 @@ describe('<Health />', () => {
 
     await waitFor(() => expect(screen.getByText('completed')).toBeTruthy());
 
-    // getAllByText, not getByText: "Search run" legitimately renders twice -
-    // once as the "Errors by context, 7d" counter label and once on the
-    // fixture's own logged event - and the fixture's error message ("The
-    // search run failed.") independently contains the same words, so a
-    // single-match query is inherently ambiguous against this fixture.
-    expect(screen.getAllByText(/search run/i).length).toBeGreaterThan(0);
+    // Assert the count alongside its label, scoped to that one tile - not
+    // just that "completed" and "1" each appear somewhere on the screen.
+    // getByText('completed') alone would still pass if a status/count
+    // mapping bug swapped values between statuses.
+    // Two levels up: `.parent` of the matched host text is RN's own `Text`
+    // composite, and its `.parent` is the `StatTile`'s enclosing `View` -
+    // the tile that also holds the sibling `<Text>{value}</Text>`.
+    const completedTile = screen.getByText('completed').parent?.parent;
+    expect(completedTile).not.toBeNull();
+    expect(within(completedTile!).getByText('1')).toBeTruthy();
+
+    // getByText on the fixture's own message text, not a query for "search
+    // run": the humanized "Search run" label also renders in the "Errors by
+    // context, 7d" counters (driven by useHealth alone), so a query that
+    // only checks for that text passes even if the error log never renders.
+    // This message string is unique to the logged event, so it only exists
+    // if useErrors actually resolved and the log rendered it.
+    expect(screen.getByText('The search run failed.')).toBeTruthy();
   });
 });
