@@ -12,6 +12,7 @@ export default function RunsLayout() {
     >
       <Stack.Screen name="index" options={{ title: 'Runs' }} />
       <Stack.Screen name="[id]" options={{ title: 'Run' }} />
+      <Stack.Screen name="image/[id]" options={{ title: 'Image' }} />
     </Stack>
   );
 }

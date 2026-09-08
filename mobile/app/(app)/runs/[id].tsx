@@ -59,9 +59,12 @@ export default function RunDetail() {
         query={images}
         numColumns={2}
         keyExtractor={(image) => String(image.id)}
-        // No href: the runs stack has no image-detail route, and linking to
-        // the one in the search stack would switch tabs mid-flow.
-        renderItem={(image) => <ImageCard image={image} />}
+        renderItem={(image) => (
+          <ImageCard
+            image={image}
+            href={{ pathname: '/(app)/runs/image/[id]', params: { id: image.id } }}
+          />
+        )}
         emptyTitle="This run returned no images"
       />
     </Screen>
