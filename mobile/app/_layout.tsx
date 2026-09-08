@@ -5,6 +5,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 
+import { AuthProvider } from '@/auth/AuthContext';
+
 export default function RootLayout() {
   // Created in state so Fast Refresh does not discard the cache on every edit.
   const [queryClient] = useState(
@@ -21,8 +23,10 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar style="auto" />
-      <Stack screenOptions={{ headerShown: false }} />
+      <AuthProvider>
+        <StatusBar style="auto" />
+        <Stack screenOptions={{ headerShown: false }} />
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
