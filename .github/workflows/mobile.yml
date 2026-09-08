@@ -53,3 +53,36 @@ jobs:
         run: npm run build:web
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL || 'http://localhost:8000' }}
+
+  deploy:
+    name: Deploy web build to Netlify
+    runs-on: ubuntu-latest
+    needs: check
+    # Only from main, and never from a fork's pull request - the secrets are
+    # not available there and the job would fail confusingly.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # EXPO_PUBLIC_API_URL is inlined into the bundle here. There is no
+      # runtime config file, so this value is baked into what ships.
+      - name: Export web build
+        run: npm run build:web
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+
+      - name: Deploy
+        run: npx --yes netlify-cli@17 deploy --dir=dist --prod --message "$GITHUB_SHA"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
