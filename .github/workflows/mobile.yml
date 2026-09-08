@@ -67,9 +67,13 @@ jobs:
     # DEPLOY_ENABLED: it lets main carry this code before the Netlify site
     # exists, skipping the job cleanly instead of failing it for want of a
     # token. Flip it to 'true' once the three Netlify values are in place.
+    # workflow_dispatch is included deliberately: EXPO_PUBLIC_API_URL is inlined
+    # at build time, so changing that variable rebuilds nothing on its own, and
+    # no push touches mobile/** just because the API moved. Without a manual
+    # trigger the only way to re-publish would be an empty commit.
     if: >-
       github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       vars.MOBILE_DEPLOY_ENABLED == 'true'
 
     steps:

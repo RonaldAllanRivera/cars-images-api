@@ -115,9 +115,17 @@ request) — not a 401. If login silently fails after a deploy, check this first
    push.
 3. The `check` job installs with `npm ci`, then runs typecheck, lint, tests,
    and a web export.
-4. The `deploy` job runs only on a push to `main` with
-   `MOBILE_DEPLOY_ENABLED == 'true'`. It rebuilds with the real
-   `EXPO_PUBLIC_API_URL` and uploads `dist/` to Netlify.
+4. The `deploy` job runs only on `main`, with `MOBILE_DEPLOY_ENABLED == 'true'`.
+   It rebuilds with the real `EXPO_PUBLIC_API_URL` and uploads `dist/` to
+   Netlify.
+
+**To deploy without pushing** — the first deploy after enabling the switch, or
+a re-publish after changing `EXPO_PUBLIC_API_URL` — use **Actions → Mobile CI →
+Run workflow** on `main`. This matters more than it looks: the API origin is
+baked into the bundle at build time, so changing that variable rebuilds nothing
+by itself, and no ordinary commit touches `mobile/**` just because the API
+moved. Without the manual trigger, the only way to re-publish would be an empty
+commit.
 
 The reverse holds too: a Laravel-only push runs `ci-cd.yml` and not
 `mobile.yml`. A push touching both runs both, which is correct.
