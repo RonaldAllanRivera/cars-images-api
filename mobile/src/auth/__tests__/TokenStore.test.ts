@@ -1,3 +1,6 @@
+/**
+ * @jest-environment jsdom
+ */
 import * as SecureStore from 'expo-secure-store';
 
 import { nativeTokenStore, TOKEN_KEY, webTokenStore } from '../TokenStore';
