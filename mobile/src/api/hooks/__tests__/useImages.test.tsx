@@ -8,7 +8,12 @@ import { useImages } from '../useImages';
 
 const wrapper = ({ children }: { children: ReactNode }) => {
   const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    // gcTime: 0 disposes the cache (and its GC timer) as soon as nothing
+    // observes it, instead of leaving it scheduled for the default 5
+    // minutes. Without this, the timer outlives the test as a real handle
+    // and Jest hangs past its normal exit - `--detectOpenHandles` catches
+    // it directly.
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
 
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
