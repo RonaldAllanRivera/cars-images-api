@@ -104,8 +104,13 @@ jobs:
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
 
+      # Pinned to a major rather than @latest so a Netlify release cannot change
+      # the deploy behaviour without a commit here. It was @17 until the API
+      # started answering that CLI's uploads with `422 no records matched` -
+      # a failure that names nothing useful, so the version is worth checking
+      # first if this step breaks again.
       - name: Deploy
-        run: npx --yes netlify-cli@17 deploy --dir=dist --prod --message "$GITHUB_SHA"
+        run: npx --yes netlify-cli@27 deploy --dir=dist --prod --message "$GITHUB_SHA"
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
