@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Api;
 
-use App\Models\CarImage;
 use App\Auth\TokenAbilities;
+use App\Models\CarImage;
 use App\Models\ErrorEvent;
 use App\Models\User;
 use Illuminate\Routing\Middleware\ThrottleRequests;
