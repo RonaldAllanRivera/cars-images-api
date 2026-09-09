@@ -1,0 +1,111 @@
+name: Mobile CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/mobile.yml'
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/mobile.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Supersede an outdated pull-request run, but never cancel a run on main:
+  # that one may be midway through publishing to Netlify, and ci-cd.yml sets
+  # false for the same reason. A cancelled deploy is worse than a slow one.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: mobile
+
+jobs:
+  check:
+    name: Typecheck, lint, test, export
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      # `npm ci` from mobile/package-lock.json only. The repository root has
+      # its own lockfile for Laravel's Vite assets and the two never mix -
+      # that separation is what stops Metro resolving the root node_modules.
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test -- --ci
+
+      - name: Export web build
+        run: npm run build:web
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL || 'http://localhost:8000' }}
+
+  deploy:
+    name: Deploy web build to Netlify
+    runs-on: ubuntu-latest
+    needs: check
+    # Only from main, never from a pull request (a fork's PR has no secrets and
+    # the job would fail confusingly), and only once the repository variable
+    # MOBILE_DEPLOY_ENABLED is 'true'. That last switch mirrors ci-cd.yml's
+    # DEPLOY_ENABLED: it lets main carry this code before the Netlify site
+    # exists, skipping the job cleanly instead of failing it for want of a
+    # token. Flip it to 'true' once the three Netlify values are in place.
+    # workflow_dispatch is included deliberately: EXPO_PUBLIC_API_URL is inlined
+    # at build time, so changing that variable rebuilds nothing on its own, and
+    # no push touches mobile/** just because the API moved. Without a manual
+    # trigger the only way to re-publish would be an empty commit.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      vars.MOBILE_DEPLOY_ENABLED == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # EXPO_PUBLIC_API_URL is inlined into the bundle here. There is no
+      # runtime config file, so this value is baked into what ships.
+      #
+      # The guard is not belt-and-braces: an unset `vars.*` renders as an
+      # empty string, `client.ts` reads it with `??` (which does not treat
+      # `""` as absent), and `new URL('/api/v1/images', "")` then throws on
+      # every request. Without this the deploy stays green and ships a site
+      # where nothing loads - so fail here instead. Setting the value as a
+      # *secret* rather than a *variable* produces exactly that.
+      - name: Export web build
+        run: |
+          test -n "$EXPO_PUBLIC_API_URL" || { echo "::error::EXPO_PUBLIC_API_URL repository variable is not set"; exit 1; }
+          npm run build:web
+        env:
+          EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+
+      - name: Deploy
+        run: npx --yes netlify-cli@17 deploy --dir=dist --prod --message "$GITHUB_SHA"
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}

@@ -117,4 +117,20 @@ return [
     | Raise it only if the host allows long-running web requests.
     */
     'bulk_download_max_images' => env('CARS_BULK_DOWNLOAD_MAX_IMAGES', 100),
+
+    /*
+    |--------------------------------------------------------------------------
+    | JSON API
+    |--------------------------------------------------------------------------
+    |
+    | POST /api/v1/searches runs the search inside the HTTP request - there is
+    | no queue worker on shared hosting - so it must finish inside PHP's
+    | max_execution_time. These caps bound what one API call may ask for. The
+    | admin panel keeps its own, wider limits; a search too big for the API
+    | is still available from the panel.
+    */
+
+    'api_search_max_year_span' => env('API_SEARCH_MAX_YEAR_SPAN', 3),
+
+    'api_search_max_images_per_year' => env('API_SEARCH_MAX_IMAGES_PER_YEAR', 5),
 ];

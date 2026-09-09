@@ -16,6 +16,7 @@ A Laravel 13 + Filament 5 application that searches, filters, reviews, and bulk-
 - [Overview](#overview)
 - [How it works](#how-it-works)
 - [Features](#features)
+- [Mobile client](#mobile-client)
 - [Engineering notes](#engineering-notes)
 - [Tech stack](#tech-stack)
 - [Getting started with Docker](#getting-started-with-docker)
@@ -125,6 +126,36 @@ The two entry points share one engine. An **ad-hoc search** (`car_searches` with
 - Dedicated **Car Makes** catalogue (makes with a models repeater) that feeds the search dropdowns.
 - **Admin Users** management with hashed passwords and blank-to-keep password editing.
 - Wikimedia block events recorded and visible, rather than failing silently.
+
+---
+
+## Mobile client
+
+An Expo app lives under [`mobile/`](mobile/) and talks to `/api/v1`. It ships
+two ways from one codebase:
+
+- **Web:** built by [`.github/workflows/mobile.yml`](.github/workflows/mobile.yml)
+  and published to Netlify on every push to `main` that touches `mobile/**`.
+- **Android APK:** planned, tag-triggered (see the design doc).
+
+Local development:
+
+```bash
+cd mobile
+npm install
+cp .env.example .env      # point EXPO_PUBLIC_API_URL at your Laravel dev server
+npm run web
+```
+
+The web build reads its API origin from `EXPO_PUBLIC_API_URL`, inlined at build
+time. Production must list the deployed web origin in `CORS_ALLOWED_ORIGINS` or
+the browser blocks every request.
+
+**Setting Netlify up for the first time, or debugging a deploy?** See
+[`docs/netlify-deploy.md`](docs/netlify-deploy.md) — it covers the one-time
+setup, why the Git repository is deliberately *not* linked to Netlify, and the
+specific failure modes worth recognising (a blank page means the CSP, a silent
+sign-in failure means CORS).
 
 ---
 
