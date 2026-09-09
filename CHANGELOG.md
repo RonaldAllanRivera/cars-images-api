@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **CI actions moved to the majors that run Node 24** — `actions/checkout@v7`,
+  `actions/cache@v6`, `actions/setup-node@v7`, across both workflows. The `v4`
+  pins declared Node 20, which the runner no longer honours: it force-migrates
+  them to 24 and warns on every job, and will eventually decline to run them.
+  `shivammathur/setup-php` stays on `v2` deliberately — that action already
+  ships a Node 24 entrypoint, so it is not part of the deprecation despite
+  looking like the oldest pin in the file. `cache@v5` and newer require runner
+  2.327.1 or newer; hosted runners are well past that, a self-hosted one would
+  need checking first.
+
+- **`netlify-cli` moved off a decade-old major**, 17 → 27. The old pin could no
+  longer upload: Netlify's API answered its deploy with `422 no records
+  matched`, a message that names neither the version nor the cause. Still
+  pinned to a major rather than `@latest`, so a Netlify release cannot change
+  deploy behaviour without a commit here — but a stale pin has its own failure
+  mode, which is what this was, so the version is worth checking first if the
+  step breaks again.
+
+### Fixed
+
+- **The contract fixtures recorded whatever `APP_URL` generated them.**
+  `ContractFixturesTest` byte-compares committed JSON against live responses,
+  and Laravel builds the absolute `links.next` and `meta.path` URLs of every
+  paginated response from `config('app.url')` — so the fixtures captured a
+  developer host (`cars-images-api.test`) while CI writes its `.env` from
+  `.env.example` (`http://localhost:8080`). The Run tests step went red on a
+  commit that changed no API code. `phpunit.xml` now pins `APP_URL` alongside
+  `CORS_ALLOWED_ORIGINS`, on the same principle already stated there — a
+  developer's or CI's `.env` must not leak in — and the three regenerated
+  fixtures differ by host string only; no response shape moved, and the Zod
+  schemas are untouched. Verified by running the suite under both `.env` files:
+  267 pass either way, and neither run leaves fixture churn behind.
+
 ### Planned
 
 - Move bulk search and bulk download onto a real queue worker so long runs are not bound by the web request timeout (the `RunCarSearchJob`, `FetchWikimediaCarImagesForYearJob`, and `DownloadCarImagesJob` classes exist as scaffolding but are not dispatched yet).

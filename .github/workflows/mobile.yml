@@ -29,9 +29,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      # These majors run on Node 24. The v4 pins declared Node 20, which the
+      # runner already refuses to honour - it force-migrates them to 24 and
+      # warns on every job - and which it will eventually not run at all. Same
+      # failure mode as the netlify-cli pin below: a version that works right
+      # up until it does not, with the warning arriving long before the break.
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -77,9 +82,9 @@ jobs:
       vars.MOBILE_DEPLOY_ENABLED == 'true'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm

@@ -36,7 +36,15 @@ jobs:
         php: ['8.3']
 
     steps:
-      - uses: actions/checkout@v4
+      # checkout and cache are on the majors that run Node 24; the v4 pins
+      # declared Node 20, which the runner force-migrates to 24 with a warning
+      # on every job and will eventually decline to run. setup-php stays on v2
+      # deliberately - that action already ships a Node 24 entrypoint, so it is
+      # not part of the deprecation despite looking like the oldest pin here.
+      #
+      # cache@v5+ requires runner 2.327.1 or newer. Hosted runners are well
+      # past that; a self-hosted runner would need checking first.
+      - uses: actions/checkout@v7
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -51,7 +59,7 @@ jobs:
         run: composer validate --strict
 
       - name: Cache Composer packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/composer/files
           key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
@@ -114,7 +122,7 @@ jobs:
       deployable: ${{ steps.filter.outputs.deployable }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Need history to diff the push range.
           fetch-depth: 0

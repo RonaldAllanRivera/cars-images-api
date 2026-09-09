@@ -478,6 +478,8 @@ The last three exist as upgrade insurance, and they earned it: they carried this
 
 `ContractFixturesTest` is not an ordinary test: it *generates* the JSON fixtures the mobile app's Zod schemas are asserted against, and fails when the committed copies no longer match what the API returns. A red run there means the API shape changed — regenerate, then run the mobile suite, and the Zod schemas will name the field that moved.
 
+Because the comparison is byte-for-byte, every source of nondeterminism has to be pinned or the test fails on a commit that changed no API code: the clock is frozen so timestamps are stable, the random token is normalized to a placeholder, and `phpunit.xml` sets `APP_URL` — Laravel builds the absolute `links.next` and `meta.path` URLs of a paginated response from `config('app.url')`, so an unpinned value records the generating machine's host into the fixtures. `CORS_ALLOWED_ORIGINS` is pinned there for the same reason: a developer's or CI's `.env` must not leak into a test.
+
 ```bash
 UPDATE_CONTRACT_FIXTURES=1 php artisan test --filter=ContractFixturesTest
 ```
@@ -527,6 +529,10 @@ Each was verified by execution, not by reading: the script was run end-to-end ag
 `cancel-in-progress` is set for pull requests only. An outdated PR run is worth superseding; a run on `main` may be midway through publishing, and a cancelled deploy is worse than a slow one.
 
 Setup and the failure modes are in [`docs/netlify-deploy.md`](docs/netlify-deploy.md).
+
+### Pins are maintenance, not safety
+
+Both workflows pin their actions to a major — `actions/checkout@v7`, `actions/cache@v6`, `actions/setup-node@v7`, `shivammathur/setup-php@v2` — and the Netlify step pins `netlify-cli` to a major too, so a third party cannot change what a deploy does without a commit here. The cost is the opposite failure mode, and both halves of it have been paid: `netlify-cli@17` went ten majors stale and started answering deploys with `422 no records matched`, a message naming neither the version nor the cause; and the `@v4` action pins declared Node 20, which the runner now force-migrates to 24 with a warning on every job and will eventually decline to run. Treat a step that breaks with no local change as a stale pin first. (`setup-php` staying on `v2` is deliberate — it already ships a Node 24 entrypoint. `cache@v5` and newer need runner 2.327.1 or newer, which hosted runners are well past.)
 
 ---
 
