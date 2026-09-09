@@ -24,7 +24,7 @@
         "next": null
     },
     "meta": {
-        "path": "http://cars-images-api.test/api/v1/errors",
+        "path": "http://localhost/api/v1/errors",
         "per_page": 24,
         "next_cursor": null,
         "prev_cursor": null

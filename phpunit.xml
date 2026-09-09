@@ -29,6 +29,14 @@
         -->
         <ini name="memory_limit" value="256M"/>
         <env name="APP_ENV" value="testing"/>
+        <!--
+            Pinned so the contract fixtures capture a stable host. Laravel
+            builds the absolute `links.next` and `meta.path` URLs of every
+            paginated response from APP_URL, so without this the fixtures
+            record whichever host the developer's .env happens to name and
+            CI - which writes its .env from .env.example - reads back a diff.
+        -->
+        <env name="APP_URL" value="http://localhost"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
