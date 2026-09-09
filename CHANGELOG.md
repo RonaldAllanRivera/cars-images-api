@@ -7,13 +7,195 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+
+- Move bulk search and bulk download onto a real queue worker so long runs are not bound by the web request timeout (the `RunCarSearchJob`, `FetchWikimediaCarImagesForYearJob`, and `DownloadCarImagesJob` classes exist as scaffolding but are not dispatched yet).
+- Persist downloaded images to the `cars` storage disk instead of streaming them straight to the browser.
+- Explore AI-assisted filtering for ambiguous results, replacing the current keyword heuristic (see `PLAN.md`).
+
+## [0.10.0] - 2026-09-09
+
+The admin panel stopped being the only way in. This release adds a versioned
+JSON API under `/api/v1` and an Expo app that consumes it — a four-tab React
+Native client that runs a search, browses a run, works a review queue and reads
+pipeline health, shipping as a static web build to Netlify from one codebase
+that an Android APK will build from unchanged.
+
+The two halves are pinned to each other rather than trusted to agree: the PHP
+suite generates the JSON fixtures the app's Zod schemas are asserted against, so
+a field renamed in a Resource is two red builds instead of a client that quietly
+renders blanks.
+
+Landing alongside it: a pipeline error log that records *why* an upload, run or
+download failed, health widgets on the admin landing page, and the coverage and
+layout fixes below.
+
+### Added
+
+#### Mobile client — an Expo app under `mobile/`
+
+- **A four-tab React Native app** — Search, Runs, Review, Health — built with
+  Expo SDK 57, Expo Router 57, React 19.2, React Native 0.86, TanStack Query 5,
+  Zod 4 and NativeWind 4, in TypeScript with `strict` on. It lives in its own
+  npm workspace with its own lockfile, its own ESLint config and its own CI
+  workflow; the repository root keeps a separate `package.json` for Laravel's
+  Vite assets and the two never mix — that separation is what stops Metro
+  resolving the root `node_modules`.
+
+- **One codebase, two targets.** `expo export -p web` produces a static site
+  published to Netlify; an Android APK is the same tree with a different build
+  command. Nothing in the app branches on "web or app" except the token store.
+
+- **The token store is one interface with two implementations.**
+  `expo-secure-store` on native, `localStorage` on web, chosen by
+  `Platform.OS`. Every web call is wrapped in try/catch, because a browser in
+  private mode can *throw* on storage access rather than returning empty — a
+  missing token means "signed out", which is recoverable; an exception at
+  module load is not. Putting a bearer token in `localStorage` is a real
+  exposure, and the mitigation is named rather than waved away: token
+  abilities are scoped, so a stolen web token can do only what the API let it
+  do.
+
+- **A route guard, not a per-screen check.** `app/(app)/_layout.tsx` redirects
+  to `/login` while the auth status is `anonymous` and renders a spinner while
+  it is `loading`. That loading branch carries its own `<PageTitle>`, because
+  the static export renders exactly that branch into every guarded route's
+  HTML — whether a session exists is only knowable in the browser — and
+  without it each of those pages would ship with a blank browser tab.
+
+- **One request path for every call.** A private `send()` builds the URL,
+  attaches the bearer header, and reads the body once, so the `204`-has-no-JSON
+  case is handled in a single place instead of in each caller. A `401` signs
+  the user out from that one function; a `403` deliberately does **not** — the
+  token is alive and merely lacks an ability, and treating the two alike would
+  log a reviewer out for touching a screen they were never granted.
+
+- **Zod validation at the boundary, not at the point of use.** Every response
+  is parsed against a schema, so drift between a PHP `Resource` and the client
+  contract throws at the fetch, naming the field that moved, instead of
+  surfacing as `undefined is not an object` three screens later.
+
+- **The API contract is pinned by generated fixtures.**
+  `tests/Feature/Api/ContractFixturesTest.php` captures real responses into
+  `mobile/src/api/__fixtures__/*.json` and fails when the committed copies no
+  longer match; the mobile suite then asserts its Zod
+  schemas against those same files. A field renamed in a Resource turns into a
+  red PHP run *and* a red TypeScript run, rather than into a client that
+  silently renders blanks. Regenerate deliberately with
+  `UPDATE_CONTRACT_FIXTURES=1 php artisan test --filter=ContractFixturesTest`.
+  The capture freezes the clock and normalises the token to a placeholder, so
+  a fixture diff always means a real change and nothing credential-shaped is
+  committed.
+
+- **Optimistic approve and reject on the review queue.** The verdict is written
+  into every cache that could hold the row, with a snapshot taken first and
+  restored if the request fails — an optimistic update that cannot undo itself
+  leaves the UI asserting something the server never accepted. The cache
+  predicate matches `queryKey[0] === 'images' || queryKey[2] === 'images'`
+  rather than a plain `['images']` prefix, because a run's own image list is
+  keyed `['searches', id, 'images', filters]` and a prefix filter would leave a
+  stale badge on exactly the screen the reviewer was looking at.
+
+- **The review queue filters client-side so a card leaves the moment the
+  verdict lands**, instead of lingering until the next refetch tells it to.
+
+- **Cursor-paginated infinite grids** shared by the search results, a run's
+  images and the review queue, plus a health screen that reads
+  `/health/summary` and the pipeline error log.
+
+- **The web build ships from GitHub Actions, not from Netlify.**
+  `.github/workflows/mobile.yml` typechecks, lints, tests and exports on every
+  push and pull request touching `mobile/**`, then publishes `dist/` with the
+  Netlify CLI. The Git repository is deliberately *not* linked to Netlify, so
+  there is one build of record rather than two that can disagree.
+  `docs/netlify-deploy.md` covers the one-time setup and the failure modes
+  worth recognising — a blank page means the CSP, a silent sign-in failure
+  means CORS.
+
+- **`netlify.toml` rewrites are specific rather than a catch-all.**
+  `web.output: "static"` writes one HTML file per route and keeps Expo Router's
+  filename verbatim, so a dynamic route lands on disk as `dist/runs/[id].html`
+  and a shared link to `/runs/42` would 404. Three ordered 200-rewrites map
+  them — `/runs/image/:id` before `/runs/:id`, since the more specific pattern
+  has to match first — and because they are not a catch-all, an existing file
+  still wins and a genuinely unknown path still 404s instead of being served an
+  app shell.
+
+- **A Content-Security-Policy with a script hash instead of
+  `'unsafe-inline'`.** The export emits exactly one inline script — the stable
+  one-liner `globalThis.__EXPO_ROUTER_HYDRATE__=true;` — so it is pinned by
+  hash and every other inline script stays blocked. `style-src` does keep
+  `'unsafe-inline'`, because React Native Web ships its rules in an inline
+  `<style>` block that no hash can cover, and the trade-off is recorded in the
+  file rather than left to be rediscovered.
+
+#### JSON API — `/api/v1`
+
+- **Versioned from the first commit.** A breaking change ships as `/v2` beside
+  it rather than in place.
+
+- **Sanctum bearer tokens with four scoped abilities** — `search:read`,
+  `search:write`, `review:write`, `errors:read` — held as constants so a typo
+  is a fatal error rather than a silent 403. `POST /auth/login` answers an
+  unknown email and a wrong password with the *same* message, so the endpoint
+  cannot be used to enumerate accounts.
+
+- **Per-route rate limits, each one named on its route** rather than inherited:
+  5/min on login (the only route the open internet can reach), 10/min on
+  `POST /searches` (it reaches Wikimedia, which has blocked this app before),
+  60/min on the write routes, 120/min on the reads.
+
+- **Endpoints.** `GET /images` and `/images/{image}` with cursor pagination and
+  filters; `GET /searches`, `/searches/{search}` and
+  `/searches/{search}/images`; `POST /searches` to run an ad-hoc search inline;
+  `PATCH /images/{image}/review` for a verdict; `GET /health/summary` and
+  `GET /errors`; and `auth/login`, `auth/logout`, `auth/me`.
+
+- **`POST /searches` is capped tighter than the admin panel.** There is no
+  queue worker on shared hosting, so the search runs inside the HTTP request
+  and must finish inside `max_execution_time`: `API_SEARCH_MAX_YEAR_SPAN` (3)
+  and `API_SEARCH_MAX_IMAGES_PER_YEAR` (5) bound what one call may ask for. A
+  search too big for the API is still available from the panel.
+
+- **A human review verdict recorded beside the machine's.** `review_status` on
+  `car_images` is separate from `make_confirmed` / `year_confirmed`, so the
+  reviewer's judgement and `MakeRelevanceChecker`'s stay comparable instead of
+  overwriting one another. The Results table shows both.
+
+- **CORS allows only the configured browser origin.** `CORS_ALLOWED_ORIGINS` is
+  empty by default and the app's web build is the only browser that should
+  reach `api/*`; the native build sends no `Origin` header and is unaffected.
+  Preflight answers cache for an hour, because an `Authorization` header makes
+  every request non-simple and so preflights it.
+
+#### Pipeline error log and health
+
+- **`error_events` records why an upload, a row, a run, a download or a
+  Wikimedia block failed**, with a retention window and a per-import ceiling —
+  every rejected row logs an event, so one bad upload could otherwise write
+  thousands; past the cap the import records a single "further errors
+  suppressed" notice. Nothing prunes on a schedule because there is no cron on
+  shared hosting, so `error-events:prune` is run by hand or from the log page.
+
+- **Pipeline health on the admin landing page** — an overview widget, a search
+  throughput chart, an errors-by-context chart and a latest-failures table —
+  and the same summary over the API for the mobile Health tab.
+
+- **A CSV upload is now capped by the image downloads it commits to**, not just
+  by the number of queries. The combo cap bounds queries; at the defaults 1,000
+  queries × 5 images is 5,000 downloads, which the run then paces at one second
+  apiece. `CSV_IMPORT_MAX_PROJECTED_IMAGES` defaults to exactly the product of
+  the two caps above it, so out of the box it rejects nothing the combo cap
+  would have allowed — but raising images-per-year is caught at upload time
+  rather than part-way through a long run.
+
+#### Admin panel
+
 A half-finished CSV import looked exactly like a finished one, and the Delete
 button on the Results table could not be reached. Both were found by QA-ing a
 screen capture of the admin against the 100-row CSV that produced it: 58
 searches, 59 images, and no way to tell from the page that 23 of those searches
 had never run.
-
-### Added
 
 - **Coverage panel on the Results page.** The table counts images; this counts
   the searches behind them. A search that never ran and a search that ran and
@@ -41,6 +223,54 @@ had never run.
 
 ### Fixed
 
+- **An empty error log was indistinguishable from a failed one.** The mobile
+  Health tab rendered the same nothing whether the log was loading, had errored,
+  or was genuinely empty — the one state that is good news looked exactly like
+  the two that are not. Each is now its own rendering.
+
+- **The review queue kept showing cards it had already ruled on.** The verdict
+  was written optimistically but the queue's own filtering ran server-side, so
+  an approved card stayed on screen until the next refetch replaced it. The
+  queue now drops the row as the verdict lands.
+
+- **Fetch failures were swallowed on the grid screens.** A failed request left
+  an empty grid that read as "no results", which is a different and much less
+  actionable fact than "the request did not come back". The error is now
+  surfaced, and card navigation was lifted out of the card so the whole tile is
+  the target rather than the image inside it.
+
+- **The search and runs tabs each nest their own stack.** They had pushed detail
+  screens onto the root navigator, so a run's images opened *outside* the tab
+  that had opened them and the back gesture left the tab bar behind.
+
+- **`EXPO_PUBLIC_API_URL` set as a secret rather than a variable shipped a dead
+  site.** An unset `vars.*` renders as an empty string, `client.ts` reads it
+  with `??` — which does not treat `""` as absent — and `new URL(path, "")`
+  then throws on every request. The deploy stayed green while nothing loaded.
+  The export step now fails on an empty value instead.
+
+- **The boolean image filters accepted anything truthy.** `make_confirmed=maybe`
+  was quietly read as `true`; only `true`/`false`/`1`/`0` are accepted now.
+
+- **A rolled-back `review_status` migration failed on MySQL**, which will not
+  drop a column while an index still references it. The index is dropped first.
+
+- **The API answered HTML to a request without an `Accept` header.** A client
+  that sends none — curl, and some native HTTP stacks — got a redirect to the
+  login page rather than a 401 in JSON.
+
+- **`POST /searches` reported a nonsense year span** when a year had already
+  failed its own validation rule: the span check ran against the invalid value
+  and added a second, contradictory error. It is skipped when either year is
+  already invalid.
+
+- **The error log write no longer takes its own table down with it.** A failure
+  while recording a failure was allowed to roll back the surrounding
+  transaction, which is the one thing an error logger must never do.
+
+- **CI could not tell a connection failure from a missing remote shell**, so a
+  network blip and a genuinely broken deploy target produced the same message.
+
 - **The Delete action was clipped off the right edge of the Results table.** At
   a 1440px viewport the scroll container is 1041px wide and the table wanted
   1326px; the 283px actions column was almost exactly the 285px that did not
@@ -67,6 +297,24 @@ had never run.
 
 ### Changed
 
+- **The Laravel and Expo pipelines are separate.** `ci-cd.yml` ignores
+  `mobile/**` and `mobile.yml` watches only it, so a change to the app cannot
+  cycle production through maintenance mode and a change to the API cannot
+  spend CI minutes on a Metro bundle.
+
+- **The Netlify deploy is gated on `MOBILE_DEPLOY_ENABLED`**, mirroring
+  `DEPLOY_ENABLED` in `ci-cd.yml`: it lets `main` carry this code before the
+  Netlify site exists, skipping the job cleanly rather than failing it for want
+  of a token. `workflow_dispatch` is included deliberately —
+  `EXPO_PUBLIC_API_URL` is inlined at build time, so changing that variable
+  rebuilds nothing on its own and no push touches `mobile/**` just because the
+  API moved. Without a manual trigger the only way to republish would be an
+  empty commit.
+
+- **`cancel-in-progress` is true for pull requests only.** An outdated PR run is
+  worth superseding; a run on `main` may be midway through publishing, and a
+  cancelled deploy is worse than a slow one.
+
 - Record actions on `Car Images` and the search-images relation manager moved
   into the same dropdown. Neither table overflowed — this is consistency, so
   row actions sit in the same place on every image table.
@@ -76,12 +324,6 @@ had never run.
 
 - The Wikimedia-blocked message points at `Run all pending` instead of telling
   the admin to re-select the remaining rows by hand.
-
-### Planned
-
-- Move bulk search and bulk download onto a real queue worker so long runs are not bound by the web request timeout (the `RunCarSearchJob`, `FetchWikimediaCarImagesForYearJob`, and `DownloadCarImagesJob` classes exist as scaffolding but are not dispatched yet).
-- Persist downloaded images to the `cars` storage disk instead of streaming them straight to the browser.
-- Explore AI-assisted filtering for ambiguous results, replacing the current keyword heuristic (see `PLAN.md`).
 
 ## [0.9.0] - 2026-08-31
 
