@@ -27,11 +27,22 @@ export type ErrorContext = z.infer<typeof ErrorContextSchema>;
 export const ErrorSeveritySchema = z.enum(['error', 'warning']);
 export type ErrorSeverity = z.infer<typeof ErrorSeveritySchema>;
 
+/**
+ * Mirrors App\Auth\TokenAbilities::all(). The last four are privileged and
+ * are issued only when a client names them in the login request: a login that
+ * sends no `abilities` receives the first four, which is what both builds do
+ * today. The enum lists all eight so that a client which does ask for a
+ * privileged scope can parse the response it gets back.
+ */
 export const TokenAbilitySchema = z.enum([
   'search:read',
   'search:write',
   'review:write',
   'errors:read',
+  'imports:read',
+  'imports:write',
+  'search:run',
+  'exports:read',
 ]);
 
 export const UserSchema = z.object({
