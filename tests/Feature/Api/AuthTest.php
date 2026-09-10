@@ -118,4 +118,105 @@ class AuthTest extends ApiTestCase
             $this->assertNotContains($ability, TokenAbilities::defaultScope());
         }
     }
+
+    public function test_login_without_abilities_issues_only_the_default_scope(): void
+    {
+        // The deployed-client guard. mobile/src/api/schemas.ts parses
+        // `abilities` through a z.enum of exactly these four, so issuing a
+        // wider set to a client that asked for nothing throws on parse and
+        // breaks sign-in on the live web build.
+        $user = User::factory()->create(['email' => 'allan@example.com']);
+
+        $this->postJson('/api/v1/auth/login', self::LOGIN)
+            ->assertCreated()
+            ->assertJsonPath('abilities', TokenAbilities::defaultScope());
+
+        $this->assertSame(TokenAbilities::defaultScope(), $user->tokens()->sole()->abilities);
+    }
+
+    public function test_login_issues_exactly_the_requested_subset(): void
+    {
+        $user = User::factory()->create(['email' => 'allan@example.com']);
+
+        $this->postJson('/api/v1/auth/login', [
+            'abilities' => [TokenAbilities::SEARCH_READ, TokenAbilities::REVIEW_WRITE],
+        ] + self::LOGIN)
+            ->assertCreated()
+            ->assertJsonPath('abilities', [TokenAbilities::SEARCH_READ, TokenAbilities::REVIEW_WRITE]);
+
+        $this->assertSame(
+            [TokenAbilities::SEARCH_READ, TokenAbilities::REVIEW_WRITE],
+            $user->tokens()->sole()->abilities,
+        );
+    }
+
+    public function test_login_grants_a_privileged_ability_when_it_is_asked_for(): void
+    {
+        // P3's native build depends on this: the privileged abilities are
+        // withheld by default, not withheld outright.
+        User::factory()->create(['email' => 'allan@example.com']);
+
+        $this->postJson('/api/v1/auth/login', [
+            'abilities' => [TokenAbilities::SEARCH_READ, TokenAbilities::SEARCH_RUN],
+        ] + self::LOGIN)
+            ->assertCreated()
+            ->assertJsonPath('abilities', [TokenAbilities::SEARCH_READ, TokenAbilities::SEARCH_RUN]);
+    }
+
+    public function test_login_canonicalises_the_order_and_collapses_duplicates(): void
+    {
+        // The issued list is intersected in all()'s order, not the request's,
+        // so the response is byte-stable whatever order the client asked in -
+        // which is what keeps the committed contract fixture stable.
+        User::factory()->create(['email' => 'allan@example.com']);
+
+        $this->postJson('/api/v1/auth/login', [
+            'abilities' => [
+                TokenAbilities::REVIEW_WRITE,
+                TokenAbilities::SEARCH_READ,
+                TokenAbilities::REVIEW_WRITE,
+            ],
+        ] + self::LOGIN)
+            ->assertCreated()
+            ->assertJsonPath('abilities', [TokenAbilities::SEARCH_READ, TokenAbilities::REVIEW_WRITE]);
+    }
+
+    public function test_login_rejects_an_unknown_ability(): void
+    {
+        // A typo must be an error, not a silently narrower token.
+        $user = User::factory()->create(['email' => 'allan@example.com']);
+
+        $this->postJson('/api/v1/auth/login', ['abilities' => ['search:reed']] + self::LOGIN)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['abilities.0']);
+
+        $this->assertSame(0, $user->tokens()->count());
+    }
+
+    public function test_login_rejects_an_empty_abilities_array(): void
+    {
+        // A zero-ability token 403s on every route it touches, which reads as
+        // a server fault from the client side. Reject at the door instead.
+        $user = User::factory()->create(['email' => 'allan@example.com']);
+
+        $this->postJson('/api/v1/auth/login', ['abilities' => []] + self::LOGIN)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['abilities']);
+
+        $this->assertSame(0, $user->tokens()->count());
+    }
+
+    public function test_the_reported_abilities_match_the_stored_token(): void
+    {
+        // These are written in two places - the response body and the token
+        // row - and a client that trusts the body while the row says
+        // something narrower gets 403s it cannot explain.
+        $user = User::factory()->create(['email' => 'allan@example.com']);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'abilities' => [TokenAbilities::ERRORS_READ, TokenAbilities::EXPORTS_READ],
+        ] + self::LOGIN)->assertCreated();
+
+        $this->assertSame($response->json('abilities'), $user->tokens()->sole()->abilities);
+    }
 }

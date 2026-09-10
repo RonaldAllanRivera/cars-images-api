@@ -14,7 +14,8 @@ use Illuminate\Validation\ValidationException;
 class LoginController extends Controller
 {
     /**
-     * Exchange credentials for a bearer token carrying the default scope.
+     * Exchange credentials for a bearer token carrying the requested scope,
+     * or the default scope when none is asked for.
      */
     public function __invoke(LoginRequest $request): JsonResponse
     {
@@ -28,10 +29,17 @@ class LoginController extends Controller
             throw ValidationException::withMessages(['email' => __('auth.failed')]);
         }
 
-        // defaultScope(), not all(): all() is the set a request may be
-        // validated against, and minting it here would hand every client the
-        // privileged abilities it never asked for.
-        $abilities = TokenAbilities::defaultScope();
+        $abilities = array_key_exists('abilities', $credentials)
+            // Intersected in all()'s order, not the request's: the issued list
+            // is then canonical however the client asked, which keeps the
+            // response byte-stable for the contract fixture, and a client that
+            // names the same ability twice gets it once. Validation already
+            // restricts each entry to all() - this is the line that still
+            // holds if that rule is ever loosened.
+            ? array_values(array_intersect(TokenAbilities::all(), $credentials['abilities']))
+            // Never all(): minting that would hand every client the privileged
+            // abilities it never asked for.
+            : TokenAbilities::defaultScope();
 
         $token = $user->createToken($credentials['device_name'], $abilities);
 
