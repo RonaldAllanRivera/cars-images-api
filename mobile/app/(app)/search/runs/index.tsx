@@ -22,10 +22,18 @@ export default function Runs() {
         {STATUSES.map((option) => (
           <Pressable
             key={option}
-            className={`rounded-full px-3 py-1 ${status === option ? 'bg-sky-500' : 'bg-slate-800'}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected: status === option }}
+            className={`rounded-pill px-3 py-1 ${
+              status === option ? 'bg-accent' : 'bg-surface-sunken'
+            }`}
             onPress={() => setStatus(option)}
           >
-            <Text className={`text-xs ${status === option ? 'text-white' : 'text-slate-300'}`}>
+            <Text
+              className={`text-micro ${
+                status === option ? 'text-accent-fg' : 'text-text-secondary'
+              }`}
+            >
               {option}
             </Text>
           </Pressable>
@@ -39,13 +47,15 @@ export default function Runs() {
         emptyHint="Start one from the Search tab."
         renderItem={(search) => (
           <Link href={{ pathname: '/(app)/search/runs/[id]', params: { id: search.id } }} asChild>
-            <Pressable className="mb-2 rounded-xl bg-slate-800 p-3 active:opacity-80">
-              <Text className="text-base font-medium text-white">
+            <Pressable className="mb-2 rounded-surface bg-surface-raised p-3 active:opacity-80">
+              <Text className="text-body font-medium text-text">
                 {search.make} {search.model ?? ''} · {search.from_year}–{search.to_year}
               </Text>
               <View className="mt-1 flex-row items-center gap-2">
                 <StatusBadge status={search.status} />
-                <Text className="text-xs text-slate-400">{search.images_count ?? 0} images</Text>
+                <Text className="text-meta text-text-secondary">
+                  {search.images_count ?? 0} images
+                </Text>
               </View>
             </Pressable>
           </Link>

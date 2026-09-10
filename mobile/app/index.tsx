@@ -2,18 +2,19 @@ import { Link } from 'expo-router';
 import { ActivityIndicator, Text, View } from 'react-native';
 
 import { useAuth } from '@/auth/AuthContext';
+import { color } from '@/theme/tokens';
 import { PageTitle } from '@/ui/PageTitle';
 
-const BUTTON = 'mt-4 rounded-lg bg-sky-500 px-6 py-3 text-base font-semibold text-white';
+const BUTTON = 'mt-4 rounded-control bg-accent px-6 py-4 text-body font-semibold text-accent-fg';
 
 export default function Landing() {
   const { status } = useAuth();
 
   return (
-    <View className="flex-1 items-center justify-center gap-4 bg-slate-900 p-6">
+    <View className="flex-1 items-center justify-center gap-4 bg-surface p-6">
       <PageTitle title="Cars Images" />
-      <Text className="text-center text-3xl font-bold text-white">Cars Images</Text>
-      <Text className="max-w-md text-center text-base text-slate-300">
+      <Text className="text-center text-title text-text">Cars Images</Text>
+      <Text className="max-w-md text-center text-body text-text-secondary">
         Search Wikimedia Commons for high-resolution car photography by make, model and year,
         review what comes back, and watch the harvest pipeline&apos;s health.
       </Text>
@@ -23,7 +24,7 @@ export default function Landing() {
           Sending them to "Sign in" instead would mint a second Sanctum token
           for the same device name on every visit, which is precisely what
           naming tokens per device is meant to avoid. */}
-      {status === 'loading' ? <ActivityIndicator className="mt-4" color="#38bdf8" /> : null}
+      {status === 'loading' ? <ActivityIndicator className="mt-4" color={color.accentText} /> : null}
 
       {status === 'authenticated' ? (
         <Link href="/(app)/search" className={BUTTON}>
