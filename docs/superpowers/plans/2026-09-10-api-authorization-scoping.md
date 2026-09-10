@@ -204,7 +204,33 @@ Expected: PASS.
 never cause a 403, so nothing should break — tests that assert a 403 pass a
 narrower set explicitly. Investigate rather than widening any assertion.
 
-- [ ] **Step 5: Correct the now-false docblock**
+- [ ] **Step 5: Point login at the default scope**
+
+Widening `all()` alone leaves the tree **red**: `LoginController` still mints
+`all()`, so all four privileged abilities leak into the login response and
+`ContractFixturesTest` fails on the byte comparison. That is the guard working,
+and the fix belongs here rather than in Task 2 — issuing the default scope is
+correct on its own, independent of client-declared scoping.
+
+In `app/Http/Controllers/Api/V1/Auth/LoginController.php`:
+
+```php
+        // defaultScope(), not all(): all() is the set a request may be
+        // validated against, and minting it here would hand every client the
+        // privileged abilities it never asked for.
+        $abilities = TokenAbilities::defaultScope();
+
+        $token = $user->createToken($credentials['device_name'], $abilities);
+```
+
+with `'abilities' => $abilities` in the response and the docblock changed from
+"carrying every ability" to "carrying the default scope".
+
+Then retarget the two assertions in the existing
+`test_login_returns_a_scoped_bearer_token`: `TokenAbilities::all()` becomes
+`TokenAbilities::defaultScope()` in both.
+
+- [ ] **Step 6: Correct the now-false docblock**
 
 `tests/Feature/Api/ApiTestCase.php` says "Defaults to all four". Change that
 sentence to:
@@ -217,12 +243,12 @@ sentence to:
      */
 ```
 
-- [ ] **Step 6: Pint, full suite, commit**
+- [ ] **Step 7: Pint, full suite, commit**
 
 ```bash
 vendor/bin/pint
 docker run --rm -v "$PWD":/app -w /app cars-ci-php:8.3 php artisan test
-git add app/Auth/TokenAbilities.php tests/Feature/Api/AuthTest.php tests/Feature/Api/ApiTestCase.php
+git add app/Auth/TokenAbilities.php app/Http/Controllers/Api/V1/Auth/LoginController.php tests/Feature/Api/AuthTest.php tests/Feature/Api/ApiTestCase.php
 git commit -m "feat(api): split the token abilities into a validation set and an issuance default"
 ```
 
@@ -347,9 +373,6 @@ Add to `tests/Feature/Api/AuthTest.php`:
         $this->assertSame($response->json('abilities'), $user->tokens()->sole()->abilities);
     }
 ```
-
-Then retarget the existing `test_login_returns_a_scoped_bearer_token`: both
-`TokenAbilities::all()` assertions in it become `TokenAbilities::defaultScope()`.
 
 - [ ] **Step 2: Run them and watch them fail**
 

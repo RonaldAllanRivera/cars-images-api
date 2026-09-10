@@ -14,7 +14,7 @@ use Illuminate\Validation\ValidationException;
 class LoginController extends Controller
 {
     /**
-     * Exchange credentials for a bearer token carrying every ability.
+     * Exchange credentials for a bearer token carrying the default scope.
      */
     public function __invoke(LoginRequest $request): JsonResponse
     {
@@ -28,12 +28,17 @@ class LoginController extends Controller
             throw ValidationException::withMessages(['email' => __('auth.failed')]);
         }
 
-        $token = $user->createToken($credentials['device_name'], TokenAbilities::all());
+        // defaultScope(), not all(): all() is the set a request may be
+        // validated against, and minting it here would hand every client the
+        // privileged abilities it never asked for.
+        $abilities = TokenAbilities::defaultScope();
+
+        $token = $user->createToken($credentials['device_name'], $abilities);
 
         return response()->json([
             'token' => $token->plainTextToken,
             'token_type' => 'Bearer',
-            'abilities' => TokenAbilities::all(),
+            'abilities' => $abilities,
             'user' => UserResource::make($user)->resolve(),
         ], 201);
     }

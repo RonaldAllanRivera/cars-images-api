@@ -17,13 +17,13 @@ class AuthTest extends ApiTestCase
 
         $response->assertCreated()
             ->assertJsonPath('token_type', 'Bearer')
-            ->assertJsonPath('abilities', TokenAbilities::all())
+            ->assertJsonPath('abilities', TokenAbilities::defaultScope())
             ->assertJsonPath('user.email', 'allan@example.com');
         $this->assertNotEmpty($response->json('token'));
 
         $token = $user->tokens()->sole();
         $this->assertSame('Pixel 8', $token->name);
-        $this->assertSame(TokenAbilities::all(), $token->abilities);
+        $this->assertSame(TokenAbilities::defaultScope(), $token->abilities);
     }
 
     public function test_login_rejects_a_wrong_password_without_issuing_a_token(): void
@@ -92,5 +92,30 @@ class AuthTest extends ApiTestCase
         $this->asToken($phone)->getJson('/api/v1/auth/me')->assertUnauthorized();
         $this->asToken($laptop)->getJson('/api/v1/auth/me')->assertOk();
         $this->assertSame(1, $user->tokens()->count());
+    }
+
+    public function test_the_default_scope_is_a_strict_subset_of_every_ability(): void
+    {
+        // The two lists do different jobs: all() is what a request is
+        // validated against, defaultScope() is what an unscoped request is
+        // issued. Collapsing them back into one method is the regression this
+        // guards - it would widen what every deployed client receives.
+        $this->assertNotSame(TokenAbilities::all(), TokenAbilities::defaultScope());
+        $this->assertEmpty(array_diff(TokenAbilities::defaultScope(), TokenAbilities::all()));
+    }
+
+    public function test_the_privileged_abilities_are_not_issued_by_default(): void
+    {
+        $privileged = [
+            TokenAbilities::IMPORTS_READ,
+            TokenAbilities::IMPORTS_WRITE,
+            TokenAbilities::SEARCH_RUN,
+            TokenAbilities::EXPORTS_READ,
+        ];
+
+        foreach ($privileged as $ability) {
+            $this->assertContains($ability, TokenAbilities::all());
+            $this->assertNotContains($ability, TokenAbilities::defaultScope());
+        }
     }
 }

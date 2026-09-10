@@ -15,8 +15,9 @@ abstract class ApiTestCase extends TestCase
     use RefreshDatabase;
 
     /**
-     * Authenticate a fresh user with the given abilities. Defaults to all
-     * four, so a test asserting a 403 must pass the narrower set on purpose.
+     * Authenticate a fresh user with the given abilities. Defaults to every
+     * ability, so a test asserting a 403 must pass the narrower set on
+     * purpose.
      */
     protected function actingAsApiUser(?array $abilities = null): User
     {
