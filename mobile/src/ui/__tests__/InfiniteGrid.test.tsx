@@ -68,4 +68,23 @@ describe('InfiniteGrid', () => {
 
     expect(getByText('Something went wrong.')).toBeTruthy();
   });
+
+  it('shows skeletons rather than a bare spinner on first load', () => {
+    const { getByLabelText, queryByText } = grid({ ...base, isLoading: true });
+
+    expect(getByLabelText('Loading')).toBeTruthy();
+    // The empty state must not flash before the first page arrives - the two
+    // branches are mutually exclusive and the order matters.
+    expect(queryByText('No images match')).toBeNull();
+  });
+
+  it('fills the viewport with skeletons rather than showing one', () => {
+    const { getAllByTestId } = grid({ ...base, isLoading: true });
+
+    // Skeletons are hidden from assistive tech, so the query has to opt in;
+    // RNTL's default includeHiddenElements: false would find none of them.
+    expect(getAllByTestId('skeleton', { includeHiddenElements: true }).length).toBeGreaterThanOrEqual(
+      4,
+    );
+  });
 });
