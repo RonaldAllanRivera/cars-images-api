@@ -10,7 +10,8 @@ jest.mock('@/auth/AuthContext', () => ({ useAuth: jest.fn() }));
 // `Tabs` needs a navigator context this test deliberately does not build:
 // what is under test is the guard in front of it, not react-navigation. The
 // stand-ins render each tab's title, so the authenticated case can still show
-// that all four tabs were handed over.
+// that all four tabs were handed over, and invoke each tab's `tabBarIcon` so
+// the icons can be counted.
 //
 // Function declarations, `Mock`-prefixed: jest lifts the factory above the
 // imports, so it runs while `../_layout` is still resolving expo-router.
@@ -22,8 +23,18 @@ function MockTabs({ children }: { children?: ReactNode }) {
   return <>{children}</>;
 }
 
-function MockTabsScreen({ options }: { options?: { title?: string } }) {
-  return <Text>{options?.title ?? ''}</Text>;
+interface MockScreenOptions {
+  title?: string;
+  tabBarIcon?: (props: { color: string; focused: boolean; size: number }) => ReactNode;
+}
+
+function MockTabsScreen({ options }: { options?: MockScreenOptions }) {
+  return (
+    <>
+      <Text>{options?.title ?? ''}</Text>
+      {options?.tabBarIcon?.({ color: '#ffffff', focused: false, size: 24 })}
+    </>
+  );
 }
 
 MockTabs.Screen = MockTabsScreen;
@@ -70,8 +81,19 @@ describe('<AppLayout />', () => {
     render(<AppLayout />);
 
     expect(screen.queryByText('redirect:/login')).toBeNull();
-    for (const tab of ['Search', 'Runs', 'Review', 'Health']) {
+    for (const tab of ['Search', 'Library', 'Review', 'Health']) {
       expect(screen.getByText(tab)).toBeTruthy();
     }
+  });
+
+  it('gives every tab an icon', () => {
+    // The live build shipped placeholder glyphs because Tabs.Screen carried
+    // only a title. A tab bar of four unlabelled triangles is the first thing
+    // a visitor sees after signing in.
+    signedIn('authenticated');
+
+    render(<AppLayout />);
+
+    expect(screen.getAllByTestId('tab-icon')).toHaveLength(4);
   });
 });

@@ -38,7 +38,7 @@ export default function Runs() {
         emptyTitle="No runs yet"
         emptyHint="Start one from the Search tab."
         renderItem={(search) => (
-          <Link href={{ pathname: '/(app)/runs/[id]', params: { id: search.id } }} asChild>
+          <Link href={{ pathname: '/(app)/search/runs/[id]', params: { id: search.id } }} asChild>
             <Pressable className="mb-2 rounded-xl bg-slate-800 p-3 active:opacity-80">
               <Text className="text-base font-medium text-white">
                 {search.make} {search.model ?? ''} · {search.from_year}–{search.to_year}

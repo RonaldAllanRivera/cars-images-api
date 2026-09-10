@@ -67,7 +67,7 @@ export default function ImageGrid() {
         renderItem={(image) => (
           <ImageCard
             image={image}
-            href={{ pathname: '/(app)/search/[id]', params: { id: image.id } }}
+            href={{ pathname: '/(app)/library/[id]', params: { id: image.id } }}
           />
         )}
         emptyTitle="No images match"

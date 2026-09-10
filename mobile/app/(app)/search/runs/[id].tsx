@@ -66,7 +66,7 @@ export default function RunDetail() {
         renderItem={(image) => (
           <ImageCard
             image={image}
-            href={{ pathname: '/(app)/runs/image/[id]', params: { id: image.id } }}
+            href={{ pathname: '/(app)/search/[id]', params: { id: image.id } }}
           />
         )}
         emptyTitle="This run returned no images"

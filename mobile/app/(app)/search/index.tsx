@@ -82,7 +82,7 @@ export default function SearchForm() {
         return;
       }
 
-      router.push({ pathname: '/(app)/runs/[id]', params: { id: result.search.id } });
+      router.push({ pathname: '/(app)/search/runs/[id]', params: { id: result.search.id } });
     } catch (caught) {
       setError(
         caught instanceof ApiValidationError
@@ -112,7 +112,7 @@ export default function SearchForm() {
               <Pressable
                 className="mt-2 self-start"
                 onPress={() =>
-                  router.push({ pathname: '/(app)/runs/[id]', params: { id: noticeRunId } })
+                  router.push({ pathname: '/(app)/search/runs/[id]', params: { id: noticeRunId } })
                 }
               >
                 <Text className="text-sm font-semibold text-sky-400">View the run</Text>
@@ -172,8 +172,14 @@ export default function SearchForm() {
           </Text>
         ) : null}
 
-        <Pressable className="mt-4 items-center py-2" onPress={() => router.push('/(app)/search/images')}>
-          <Text className="text-sm text-sky-400">Browse all images</Text>
+        {/* The "Browse all images" link that used to sit here is gone: the
+            grid is the Library tab now, rather than a footnote at the bottom
+            of a form. */}
+        <Pressable
+          className="mt-2 items-center py-2"
+          onPress={() => router.push('/(app)/search/runs')}
+        >
+          <Text className="text-meta font-medium text-accent-text">See recent runs</Text>
         </Pressable>
       </ScrollView>
     </Screen>
