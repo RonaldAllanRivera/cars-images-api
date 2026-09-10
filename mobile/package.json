@@ -41,6 +41,7 @@
     "android": "expo start --android",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "routes:types": "node scripts/generate-route-types.mjs",
     "lint": "eslint .",
     "test": "jest",
     "build:web": "expo export -p web"
