@@ -71,6 +71,14 @@ jobs:
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL || 'http://localhost:8000' }}
 
+      # Static export means every dynamic route needs a hand-written rewrite in
+      # netlify.toml, and nothing links that list to the router. The P1 tab
+      # restructure left /runs/:id pointing at a deleted page while /library/:id
+      # had no rewrite at all - a 404 on any shared link or hard refresh, which
+      # never shows up locally because clicking through is client-side routing.
+      - name: Check the Netlify rewrites match the exported routes
+        run: npm run check:redirects
+
   deploy:
     name: Deploy web build to Netlify
     runs-on: ubuntu-latest

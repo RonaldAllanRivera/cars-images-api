@@ -44,7 +44,8 @@
     "routes:types": "node scripts/generate-route-types.mjs",
     "lint": "eslint .",
     "test": "jest",
-    "build:web": "expo export -p web"
+    "build:web": "expo export -p web",
+    "check:redirects": "node scripts/check-netlify-redirects.mjs"
   },
   "private": true
 }
