@@ -17,11 +17,34 @@ import {
   LoginResponseSchema,
   SearchSchema,
   single,
+  TokenAbilitySchema,
   UserSchema,
   ValidationErrorSchema,
 } from '../schemas';
 
 describe('the API contract', () => {
+  it('accepts every ability the API can issue, including the privileged ones', () => {
+    // P2 never requests these; P3's native build does. A narrow enum here
+    // would throw on a login response that is entirely valid, which is the
+    // failure mode this whole sub-project exists to avoid.
+    const every = [
+      'search:read',
+      'search:write',
+      'review:write',
+      'errors:read',
+      'imports:read',
+      'imports:write',
+      'search:run',
+      'exports:read',
+    ];
+
+    expect(() => TokenAbilitySchema.array().parse(every)).not.toThrow();
+  });
+
+  it('still rejects an ability the API cannot issue', () => {
+    expect(() => TokenAbilitySchema.parse('users:write')).toThrow();
+  });
+
   it('parses the unwrapped login response', () => {
     const parsed = LoginResponseSchema.parse(loginFixture);
 
