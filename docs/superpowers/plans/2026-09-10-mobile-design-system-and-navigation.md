@@ -311,10 +311,25 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 6: Prove Tailwind can read the module from Node**
+- [ ] **Step 6: Prove Tailwind can read the module**
 
-Run: `cd mobile && node -e "const c=require('./tailwind.config.js'); const x=c.theme.extend.colors; if(x.surface.DEFAULT!=='#020617') throw new Error('tokens not wired'); console.log('ok')"`
-Expected: `ok`.
+**Not** with bare `node -e "require('./tailwind.config.js')"` — Node cannot
+require a `.ts` file and that check fails while the real build succeeds.
+Tailwind loads its own config through `jiti`, which transpiles the nested
+`require('./src/theme/tokens')`, so the authoritative test is a real Tailwind
+run that emits a class built from a token:
+
+```bash
+cd mobile
+mkdir -p /tmp/twprobe
+echo 'export const x = "bg-surface text-accent-text rounded-surface text-micro";' > /tmp/twprobe/probe.tsx
+npx tailwindcss -i ./global.css -o /tmp/tw-probe.css --content '/tmp/twprobe/probe.tsx'
+grep -A2 '\.bg-surface\b' /tmp/tw-probe.css
+```
+
+Expected: `background-color: rgb(2 6 23 / …)` — the rgb form of `#020617`. If
+Tailwind errors instead, fall back to a plain `tokens.js` with a `tokens.d.ts`
+beside it, as the spec's risk table allows.
 
 - [ ] **Step 7: Typecheck, lint, commit**
 
