@@ -4,9 +4,10 @@ import type { Href } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 
 import type { Image as CarImage } from '@/api/schemas';
+import { byline } from '@/format/imageTitle';
 import { StatusBadge } from './StatusBadge';
 
-const SHELL = 'mb-3 flex-1 overflow-hidden rounded-xl bg-slate-800';
+const SHELL = 'mb-3 flex-1 overflow-hidden rounded-surface bg-surface-raised';
 
 /**
  * Presentational. `href` is supplied by the screen rather than hardcoded here:
@@ -15,6 +16,9 @@ const SHELL = 'mb-3 flex-1 overflow-hidden rounded-xl bg-slate-800';
  * they were in. Omit it for a card that should not navigate.
  */
 export function ImageCard({ image, href }: { image: CarImage; href?: Href }) {
+  const name = [image.make, image.model, image.year].filter(Boolean).join(' ');
+  const credit = byline(image.attribution, image.title);
+
   const body = (
     <>
       <Image
@@ -23,11 +27,17 @@ export function ImageCard({ image, href }: { image: CarImage; href?: Href }) {
         contentFit="cover"
         transition={150}
         cachePolicy="disk"
+        accessibilityLabel={name}
       />
-      <View className="gap-1 p-2">
-        <Text className="text-sm font-medium text-white" numberOfLines={1}>
-          {image.make} {image.model ?? ''} {image.year}
+      <View className="gap-1 p-3">
+        <Text className="text-body font-medium text-text" numberOfLines={1}>
+          {name}
         </Text>
+        {credit ? (
+          <Text className="text-meta text-text-muted" numberOfLines={1}>
+            {credit}
+          </Text>
+        ) : null}
         <StatusBadge status={image.review_status} />
       </View>
     </>
