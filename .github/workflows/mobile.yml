@@ -48,6 +48,15 @@ jobs:
       - name: Install
         run: npm ci
 
+      # `Href` is a literal union of the app's real routes, generated into
+      # .expo/types/router.d.ts - and .expo/ is gitignored, so CI never had
+      # it. Absent, tsconfig's `include` matches nothing, `Href` degrades to a
+      # permissive type, and tsc reports zero errors on a link that cannot
+      # resolve. Only the dev server writes that file; `expo export` does not,
+      # so the typecheck below is only worth running after this step.
+      - name: Generate route types
+        run: npm run routes:types
+
       - name: Typecheck
         run: npm run typecheck
 
