@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { useImages } from '@/api/hooks/useImages';
 import type { ReviewStatus } from '@/api/schemas';
+import { Field } from '@/ui/Field';
 import { ImageCard } from '@/ui/ImageCard';
 import { InfiniteGrid } from '@/ui/InfiniteGrid';
 import { PageTitle } from '@/ui/PageTitle';
@@ -38,22 +39,32 @@ export default function ImageGrid() {
           `where('make', ...)`, so "Toy" - and every other prefix - matches
           nothing. The placeholder and the empty hint have to say so, or the
           screen reads as broken. */}
-      <TextInput
-        className="mb-3 rounded-lg bg-slate-800 px-4 py-3 text-white"
-        placeholder="Exact make, e.g. Toyota"
-        placeholderTextColor="#94a3b8"
-        value={make}
-        onChangeText={setMake}
-      />
+      <View className="mb-3">
+        <Field
+          label="Make"
+          hint="An exact match - 'Toyota', not 'Toy'."
+          placeholder="e.g. Toyota"
+          value={make}
+          onChangeText={setMake}
+        />
+      </View>
 
       <View className="mb-3 flex-row gap-2">
         {STATUSES.map((option) => (
           <Pressable
             key={option}
-            className={`rounded-full px-3 py-1 ${status === option ? 'bg-sky-500' : 'bg-slate-800'}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected: status === option }}
+            className={`rounded-pill px-3 py-1 ${
+              status === option ? 'bg-accent' : 'bg-surface-sunken'
+            }`}
             onPress={() => setStatus(option)}
           >
-            <Text className={`text-xs ${status === option ? 'text-white' : 'text-slate-300'}`}>
+            <Text
+              className={`text-micro ${
+                status === option ? 'text-accent-fg' : 'text-text-secondary'
+              }`}
+            >
               {option}
             </Text>
           </Pressable>
@@ -67,7 +78,7 @@ export default function ImageGrid() {
         renderItem={(image) => (
           <ImageCard
             image={image}
-            href={{ pathname: '/(app)/search/[id]', params: { id: image.id } }}
+            href={{ pathname: '/(app)/library/[id]', params: { id: image.id } }}
           />
         )}
         emptyTitle="No images match"

@@ -1,10 +1,12 @@
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 
 import { ApiValidationError } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
+import { Button } from '@/ui/Button';
 import { ErrorBanner } from '@/ui/ErrorBanner';
+import { Field } from '@/ui/Field';
 import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
 
@@ -50,46 +52,32 @@ export default function Login() {
   return (
     <Screen>
       <PageTitle title="Sign in - Cars Images" />
-      <View className="flex-1 justify-center gap-3">
-        <Text className="mb-2 text-2xl font-bold text-white">Sign in</Text>
+      <View className="flex-1 justify-center gap-4">
+        <Text className="text-title text-text">Sign in</Text>
 
         {error ? <ErrorBanner message={error} /> : null}
 
-        <TextInput
-          className="rounded-lg bg-slate-800 px-4 py-3 text-white"
-          placeholder="Email"
-          placeholderTextColor="#94a3b8"
+        <Field
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
         />
 
-        <TextInput
-          className="rounded-lg bg-slate-800 px-4 py-3 text-white"
-          placeholder="Password"
-          placeholderTextColor="#94a3b8"
-          autoCapitalize="none"
-          secureTextEntry
+        <Field
+          label="Password"
           value={password}
           onChangeText={setPassword}
+          autoCapitalize="none"
+          secureTextEntry
           onSubmitEditing={submit}
         />
 
-        <Pressable
-          className="mt-2 items-center rounded-lg bg-sky-500 px-6 py-3 active:opacity-80"
-          disabled={busy}
-          onPress={submit}
-        >
-          {busy ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text className="text-base font-semibold text-white">Sign in</Text>
-          )}
-        </Pressable>
+        <Button label="Sign in" onPress={submit} pending={busy} size="lg" />
 
-        <Text className="mt-4 text-center text-xs text-slate-400">
+        <Text className="text-center text-meta text-text-muted">
           Credentials are issued on request. There is no demo account.
         </Text>
       </View>

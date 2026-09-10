@@ -21,11 +21,14 @@ const wrapper = ({ children }: { children: ReactNode }) => {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 };
 
+// By label, not by placeholder. Every field carries a real label now, and a
+// label is what the field is; a placeholder is a disposable hint that can be
+// reworded without the form changing meaning.
 const fillIn = (make: string, fromYear: string, toYear: string) => {
-  fireEvent.changeText(screen.getByPlaceholderText('Make (e.g. Toyota)'), make);
-  fireEvent.changeText(screen.getByPlaceholderText('From year'), fromYear);
-  fireEvent.changeText(screen.getByPlaceholderText('To year'), toYear);
-  fireEvent.press(screen.getByText('Run search'));
+  fireEvent.changeText(screen.getByLabelText('Make'), make);
+  fireEvent.changeText(screen.getByLabelText('From year'), fromYear);
+  fireEvent.changeText(screen.getByLabelText('To year'), toYear);
+  fireEvent.press(screen.getByLabelText('Run search'));
 };
 
 describe('<SearchForm /> cap enforcement', () => {

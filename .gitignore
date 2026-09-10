@@ -58,3 +58,6 @@ deploy-secrets.local.txt
 /mobile/android
 /mobile/ios
 /mobile/.env
+
+# Playwright MCP screenshot scratch
+/.playwright-mcp/

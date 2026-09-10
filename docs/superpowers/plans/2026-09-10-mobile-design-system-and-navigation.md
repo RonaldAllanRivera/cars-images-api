@@ -311,10 +311,25 @@ module.exports = {
 };
 ```
 
-- [ ] **Step 6: Prove Tailwind can read the module from Node**
+- [ ] **Step 6: Prove Tailwind can read the module**
 
-Run: `cd mobile && node -e "const c=require('./tailwind.config.js'); const x=c.theme.extend.colors; if(x.surface.DEFAULT!=='#020617') throw new Error('tokens not wired'); console.log('ok')"`
-Expected: `ok`.
+**Not** with bare `node -e "require('./tailwind.config.js')"` — Node cannot
+require a `.ts` file and that check fails while the real build succeeds.
+Tailwind loads its own config through `jiti`, which transpiles the nested
+`require('./src/theme/tokens')`, so the authoritative test is a real Tailwind
+run that emits a class built from a token:
+
+```bash
+cd mobile
+mkdir -p /tmp/twprobe
+echo 'export const x = "bg-surface text-accent-text rounded-surface text-micro";' > /tmp/twprobe/probe.tsx
+npx tailwindcss -i ./global.css -o /tmp/tw-probe.css --content '/tmp/twprobe/probe.tsx'
+grep -A2 '\.bg-surface\b' /tmp/tw-probe.css
+```
+
+Expected: `background-color: rgb(2 6 23 / …)` — the rgb form of `#020617`. If
+Tailwind errors instead, fall back to a plain `tokens.js` with a `tokens.d.ts`
+beside it, as the spec's risk table allows.
 
 - [ ] **Step 7: Typecheck, lint, commit**
 
@@ -1563,19 +1578,50 @@ export default function LibraryLayout() {
 }
 ```
 
-- [ ] **Step 8: Run the suite and the typecheck**
+- [ ] **Step 8: Regenerate the typed-route union, then typecheck**
 
-Run: `cd mobile && npm run typecheck && npm test`
+`experiments.typedRoutes` is on, so `Href` is a literal union generated into
+`.expo/types/router.d.ts`. **`expo export` does not regenerate it — only
+`expo start` does.** Skipping this step leaves `tsc` validating moved routes
+against the old union, reporting errors for paths that now exist and none for
+paths that no longer do:
+
+```bash
+cd mobile
+(timeout 60 npx expo start --port 8123 </dev/null >/tmp/expo-start.log 2>&1 &)
+for i in $(seq 1 40); do
+  grep -q 'library' .expo/types/router.d.ts 2>/dev/null && break
+  command sleep 1.5
+done
+pkill -f 'expo start --port 8123'
+grep -c "'/(app)'}/runs" .expo/types/router.d.ts   # expect 0
+```
+
+Then run: `cd mobile && npm run typecheck && npm test`
 Expected: PASS. A `typecheck` failure naming a route string means a literal in
 the table above was missed.
+
+**Note for CI:** `.expo/` is gitignored, so this file never reaches CI. With it
+absent, `tsconfig`'s `include` matches nothing and `Href` degrades to a
+permissive type — so **CI cannot catch a stale route literal**. The typed-route
+guarantee is local-only. Worth addressing before P3 moves more routes.
 
 - [ ] **Step 9: Prove the web build still exports**
 
 Run: `cd mobile && npm run build:web`
-Expected: exits 0. Then confirm the route manifest has the new shape:
+Expected: exits 0.
 
-Run: `cd mobile && node -e "const r=require('./dist/_expo/.routes.json'); const p=JSON.stringify(r); if(p.includes('(app)/runs')) throw new Error('stale runs route exported'); if(!p.includes('library')) throw new Error('library route missing'); console.log('routes ok')"`
-Expected: `routes ok`.
+`dist/_expo/.routes.json` holds only `{"redirects":[]}` and says nothing about
+routes — assert against the exported tree instead:
+
+```bash
+cd mobile
+test ! -d "dist/(app)/runs"        && echo 'ok: no stale runs route'
+test -d "dist/library"             && echo 'ok: library route exported'
+test -d "dist/(app)/search/runs"   && echo 'ok: runs moved under search'
+```
+
+Expected: all three `ok:` lines.
 
 - [ ] **Step 10: Commit**
 

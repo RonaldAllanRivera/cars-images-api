@@ -5,12 +5,18 @@ interface Tone {
   text: string;
 }
 
-const NEUTRAL: Tone = { bg: 'bg-slate-500/15', text: 'text-slate-300' };
-const GOOD: Tone = { bg: 'bg-emerald-500/15', text: 'text-emerald-300' };
-const BUSY: Tone = { bg: 'bg-sky-500/15', text: 'text-sky-300' };
-const BAD: Tone = { bg: 'bg-red-500/15', text: 'text-red-300' };
+const NEUTRAL: Tone = { bg: 'bg-surface-sunken', text: 'text-text-secondary' };
+const GOOD: Tone = { bg: 'bg-success/15', text: 'text-success-text' };
+const BUSY: Tone = { bg: 'bg-info/15', text: 'text-info-text' };
+const BAD: Tone = { bg: 'bg-danger/15', text: 'text-danger-text' };
 
-/** Keyed by both review_status and download_status - they never collide. */
+/**
+ * Keyed by both review_status and download_status - they never collide.
+ *
+ * No status is ever amber. Amber is the primary-action colour, so a badge in
+ * it would compete with every button on the screen and blur the line between
+ * "this is what happened" and "this is what you can do".
+ */
 const TONE: Record<string, Tone> = {
   completed: GOOD,
   approved: GOOD,
@@ -29,8 +35,8 @@ export function StatusBadge({ status }: { status: string }) {
   const tone = TONE[status] ?? NEUTRAL;
 
   return (
-    <View className={`self-start rounded-full px-2 py-0.5 ${tone.bg}`}>
-      <Text className={`text-xs font-medium ${tone.text}`}>{status.replace(/_/g, ' ')}</Text>
+    <View className={`self-start rounded-pill px-2 py-0.5 ${tone.bg}`}>
+      <Text className={`text-micro ${tone.text}`}>{status.replace(/_/g, ' ')}</Text>
     </View>
   );
 }

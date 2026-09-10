@@ -3,8 +3,10 @@ import type { ReactElement } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl } from 'react-native';
 
 import type { CursorPage } from '@/api/schemas';
+import { color } from '@/theme/tokens';
 import { EmptyState } from './EmptyState';
 import { ErrorBanner } from './ErrorBanner';
+import { SkeletonGrid } from './Skeleton';
 
 interface Props<T> {
   query: {
@@ -39,7 +41,9 @@ export function InfiniteGrid<T>({
   const items = query.data?.pages.flatMap((page) => page.data) ?? [];
 
   if (query.isLoading) {
-    return <ActivityIndicator className="mt-8" color="#38bdf8" />;
+    // Shaped like the content it replaces, so the layout does not jump when
+    // the first page lands. Six fills a phone screen at either column count.
+    return <SkeletonGrid count={6} numColumns={numColumns} />;
   }
 
   return (
@@ -55,7 +59,11 @@ export function InfiniteGrid<T>({
         if (query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage();
       }}
       refreshControl={
-        <RefreshControl refreshing={query.isRefetching} onRefresh={query.refetch} tintColor="#38bdf8" />
+        <RefreshControl
+          refreshing={query.isRefetching}
+          onRefresh={query.refetch}
+          tintColor={color.accentText}
+        />
       }
       ListEmptyComponent={
         query.isError ? (
@@ -69,7 +77,9 @@ export function InfiniteGrid<T>({
         )
       }
       ListFooterComponent={
-        query.isFetchingNextPage ? <ActivityIndicator className="my-4" color="#38bdf8" /> : null
+        query.isFetchingNextPage ? (
+          <ActivityIndicator className="my-4" color={color.accentText} />
+        ) : null
       }
     />
   );

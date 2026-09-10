@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { ApiValidationError } from '@/api/client';
 import {
@@ -8,7 +8,9 @@ import {
   MAX_YEAR_SPAN,
   useCreateSearch,
 } from '@/api/hooks/useCreateSearch';
+import { Button } from '@/ui/Button';
 import { ErrorBanner } from '@/ui/ErrorBanner';
+import { Field } from '@/ui/Field';
 import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
 
@@ -82,7 +84,7 @@ export default function SearchForm() {
         return;
       }
 
-      router.push({ pathname: '/(app)/runs/[id]', params: { id: result.search.id } });
+      router.push({ pathname: '/(app)/search/runs/[id]', params: { id: result.search.id } });
     } catch (caught) {
       setError(
         caught instanceof ApiValidationError
@@ -98,82 +100,76 @@ export default function SearchForm() {
     <Screen>
       <PageTitle title="New search - Cars Images" />
       <ScrollView contentContainerClassName="gap-3">
-        <Text className="text-xl font-bold text-white">New search</Text>
-        <Text className="text-sm text-slate-400">
+        <Text className="text-title text-text">New search</Text>
+        <Text className="text-meta text-text-secondary">
           Runs immediately against Wikimedia Commons. Up to {MAX_YEAR_SPAN + 1} years,{' '}
           {MAX_IMAGES_PER_YEAR} images per year.
         </Text>
 
         {error ? <ErrorBanner message={error} /> : null}
         {notice ? (
-          <View className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-            <Text className="text-sm text-amber-200">{notice}</Text>
+          <View className="rounded-surface border border-accent/40 bg-accent/10 p-3">
+            <Text className="text-body text-accent-text">{notice}</Text>
             {noticeRunId !== null ? (
               <Pressable
                 className="mt-2 self-start"
                 onPress={() =>
-                  router.push({ pathname: '/(app)/runs/[id]', params: { id: noticeRunId } })
+                  router.push({ pathname: '/(app)/search/runs/[id]', params: { id: noticeRunId } })
                 }
               >
-                <Text className="text-sm font-semibold text-sky-400">View the run</Text>
+                <Text className="text-meta font-semibold text-accent-text">View the run</Text>
               </Pressable>
             ) : null}
           </View>
         ) : null}
 
-        <TextInput
-          className="rounded-lg bg-slate-800 px-4 py-3 text-white"
-          placeholder="Make (e.g. Toyota)"
-          placeholderTextColor="#94a3b8"
-          value={make}
-          onChangeText={setMake}
-        />
-        <TextInput
-          className="rounded-lg bg-slate-800 px-4 py-3 text-white"
-          placeholder="Model (optional)"
-          placeholderTextColor="#94a3b8"
+        <Field label="Make" placeholder="e.g. Toyota" value={make} onChangeText={setMake} />
+        <Field
+          label="Model"
+          hint="Optional. Narrows the search to one model."
           value={model}
           onChangeText={setModel}
         />
         <View className="flex-row gap-3">
-          <TextInput
-            className="flex-1 rounded-lg bg-slate-800 px-4 py-3 text-white"
-            placeholder="From year"
-            placeholderTextColor="#94a3b8"
-            keyboardType="number-pad"
-            value={fromYear}
-            onChangeText={setFromYear}
-          />
-          <TextInput
-            className="flex-1 rounded-lg bg-slate-800 px-4 py-3 text-white"
-            placeholder="To year"
-            placeholderTextColor="#94a3b8"
-            keyboardType="number-pad"
-            value={toYear}
-            onChangeText={setToYear}
-          />
+          <View className="flex-1">
+            <Field
+              label="From year"
+              keyboardType="number-pad"
+              value={fromYear}
+              onChangeText={setFromYear}
+            />
+          </View>
+          <View className="flex-1">
+            <Field
+              label="To year"
+              keyboardType="number-pad"
+              value={toYear}
+              onChangeText={setToYear}
+            />
+          </View>
         </View>
 
-        <Pressable
-          className="items-center rounded-lg bg-sky-500 px-6 py-3 active:opacity-80"
-          disabled={createSearch.isPending}
+        <Button
+          label="Run search"
           onPress={submit}
-        >
-          {createSearch.isPending ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text className="text-base font-semibold text-white">Run search</Text>
-          )}
-        </Pressable>
+          pending={createSearch.isPending}
+          size="lg"
+        />
 
         {createSearch.isPending ? (
-          <Text className="text-center text-xs text-slate-500">
+          <Text className="text-center text-meta text-text-muted">
             This runs inline and can take several seconds.
           </Text>
         ) : null}
 
-        <Pressable className="mt-4 items-center py-2" onPress={() => router.push('/(app)/search/images')}>
-          <Text className="text-sm text-sky-400">Browse all images</Text>
+        {/* The "Browse all images" link that used to sit here is gone: the
+            grid is the Library tab now, rather than a footnote at the bottom
+            of a form. */}
+        <Pressable
+          className="mt-2 items-center py-2"
+          onPress={() => router.push('/(app)/search/runs')}
+        >
+          <Text className="text-meta font-medium text-accent-text">See recent runs</Text>
         </Pressable>
       </ScrollView>
     </Screen>
