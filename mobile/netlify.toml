@@ -5,27 +5,36 @@
   publish = "dist"
 
 # `web.output: "static"` exports one HTML file per route, and a dynamic route
-# keeps its Expo Router filename verbatim - `dist/runs/[id].html`. Netlify has
-# no `[id]` convention of its own, so without these a shared link to /runs/42
-# is a 404.
+# keeps its Expo Router filename verbatim - `dist/library/[id].html`. Netlify
+# has no `[id]` convention of its own, so without these a shared link to
+# /library/42 is a 404.
 #
 # Rewrites (status 200), deliberately not a catch-all: an existing file still
-# wins, so /search/images is untouched, and a genuinely unknown path still
-# 404s instead of being served an app shell. Order matters - the more specific
-# /runs/image/:id has to be matched before /runs/:id.
+# wins, so /search/runs is served by its own index.html rather than matching
+# /search/:id, and a genuinely unknown path still 404s instead of being handed
+# an app shell. Order matters anyway - the deeper /search/runs/:id is listed
+# before /search/:id rather than relying on that precedence.
+#
+# This list is maintained by hand and nothing links it to the router, so a
+# renamed route leaves a rewrite pointing at a file that no longer exists while
+# the new route has none. That is not hypothetical: the P1 tab restructure
+# moved runs/ under search/ and added library/, and this file kept redirecting
+# /runs/:id for three days while /library/:id 404'd in production. Clicking
+# through inside the app still worked - only a hard navigation showed it.
+# scripts/check-netlify-redirects.mjs now fails the build on that drift.
 [[redirects]]
-  from = "/runs/image/:id"
-  to = "/runs/image/[id].html"
-  status = 200
-
-[[redirects]]
-  from = "/runs/:id"
-  to = "/runs/[id].html"
+  from = "/search/runs/:id"
+  to = "/search/runs/[id].html"
   status = 200
 
 [[redirects]]
   from = "/search/:id"
   to = "/search/[id].html"
+  status = 200
+
+[[redirects]]
+  from = "/library/:id"
+  to = "/library/[id].html"
   status = 200
 
 # The web build keeps its bearer token in localStorage, so the cheap defences
