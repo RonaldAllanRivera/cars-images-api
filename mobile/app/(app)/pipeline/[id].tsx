@@ -1,18 +1,34 @@
+import { useKeepAwake } from 'expo-keep-awake';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import { useBulkRun } from '@/api/hooks/useBulkRun';
 import { useImport } from '@/api/hooks/useImports';
 import { useSearches } from '@/api/hooks/useSearches';
 import type { Search } from '@/api/schemas';
 import { CoveragePanel } from '@/ui/CoveragePanel';
 import type { CoverageFilter } from '@/ui/CoveragePanel';
+import { Button } from '@/ui/Button';
 import { ErrorBanner } from '@/ui/ErrorBanner';
 import { InfiniteGrid } from '@/ui/InfiniteGrid';
 import { PageTitle } from '@/ui/PageTitle';
+import { RunProgress } from '@/ui/RunProgress';
 import { Screen } from '@/ui/Screen';
 import { Skeleton } from '@/ui/Skeleton';
 import { StatusBadge } from '@/ui/StatusBadge';
+
+/**
+ * Holds the screen on for as long as it is mounted, and is mounted only while
+ * a run is active. A conditional `useKeepAwake()` is not possible - hooks
+ * cannot be called conditionally - so the condition lives in whether this
+ * renders at all.
+ */
+function KeepScreenAwake() {
+  useKeepAwake();
+
+  return null;
+}
 
 export default function ImportDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -24,6 +40,7 @@ export default function ImportDetail() {
   const [coverage, setCoverage] = useState<CoverageFilter | null>(null);
 
   const csvImport = useImport(importId);
+  const run = useBulkRun(importId);
   const queries = useSearches({ source: 'csv', csv_import_id: importId, ...(coverage ? { coverage } : {}) });
 
   if (csvImport.isLoading) {
@@ -47,6 +64,7 @@ export default function ImportDetail() {
   }
 
   const data = csvImport.data;
+  const notRun = data.coverage?.not_run ?? 0;
 
   return (
     <Screen>
@@ -61,6 +79,31 @@ export default function ImportDetail() {
       </Text>
 
       <CoveragePanel coverage={data.coverage ?? null} selected={coverage} onSelect={setCoverage} />
+
+      {run.status === 'running' || run.status === 'paused' ? <KeepScreenAwake /> : null}
+
+      <RunProgress
+        status={run.status}
+        processed={run.processed}
+        failed={run.failed}
+        total={run.total}
+        secondsRemaining={run.secondsRemaining}
+        blocked={run.blocked}
+        onPause={run.pause}
+        onResume={run.resume}
+      />
+
+      {/* Offered only when there is work: a Run button over a finished import
+          promises something the endpoint would answer with an empty chunk. */}
+      {notRun > 0 && (run.status === 'idle' || run.status === 'finished' || run.status === 'blocked') ? (
+        <View className="mb-6">
+          <Button
+            label={`Run ${notRun} ${notRun === 1 ? 'query' : 'queries'}`}
+            size="lg"
+            onPress={() => run.start(notRun)}
+          />
+        </View>
+      ) : null}
 
       <InfiniteGrid
         query={queries}
