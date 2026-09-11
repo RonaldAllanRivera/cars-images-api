@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\HealthSummaryController;
 use App\Http\Controllers\Api\V1\ImageController;
 use App\Http\Controllers\Api\V1\ImportController;
 use App\Http\Controllers\Api\V1\ReviewImageController;
+use App\Http\Controllers\Api\V1\RunChunkController;
 use App\Http\Controllers\Api\V1\SearchController;
 use Illuminate\Support\Facades\Route;
 
@@ -47,6 +48,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('imports', [ImportController::class, 'index'])->name('imports.index');
             Route::get('imports/{import}', [ImportController::class, 'show'])->name('imports.show');
         });
+
+        // Reaches Wikimedia repeatedly, so it shares the tightest authenticated
+        // limit with POST /searches. The per-chunk bounds are config, not
+        // parameters - a client cannot ask for a bigger slice. Placed above
+        // searches/{search} as cheap insurance: those are all GET today, so a
+        // POST literal cannot be captured, but that stays true for free.
+        Route::post('searches/run-chunk', RunChunkController::class)
+            ->middleware(['ability:'.TokenAbilities::SEARCH_RUN, 'throttle:10,1'])
+            ->name('searches.run-chunk');
 
         // Reaches Wikimedia, which has blocked this app before: the tightest
         // authenticated limit, on top of the size caps in StoreSearchRequest.
