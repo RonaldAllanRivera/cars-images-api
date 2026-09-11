@@ -24,17 +24,4 @@ class CarSearchPolicy
     {
         return true;
     }
-
-    /**
-     * Advancing searches that already exist.
-     *
-     * Separate from `create`, which is the verb that makes new ones: a token
-     * may reasonably be allowed to drain a queue without being allowed to
-     * fill it, and that distinction is why search:run and search:write are
-     * separate abilities.
-     */
-    public function run(User $user): bool
-    {
-        return true;
-    }
 }

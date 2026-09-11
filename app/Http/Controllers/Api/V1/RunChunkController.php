@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\RunChunkRequest;
-use App\Models\CarSearch;
+use App\Models\CsvImport;
 use App\Services\Search\RunChunkAction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
@@ -22,9 +22,15 @@ class RunChunkController extends Controller
      */
     public function __invoke(RunChunkRequest $request, RunChunkAction $action): JsonResponse
     {
-        Gate::authorize('run', CarSearch::class);
+        // Resolved and authorized as an object, not a class: the client names
+        // which import to run, so that object has to reach the policy. The
+        // check is permissive today - there is no ownership model in this app -
+        // but a class-level gate could never become one.
+        $import = CsvImport::findOrFail((int) $request->validated()['csv_import_id']);
 
-        $result = $action->execute((int) $request->validated()['csv_import_id']);
+        Gate::authorize('run', $import);
+
+        $result = $action->execute($import->id);
 
         return response()->json([
             'outcomes' => $result->outcomes,
