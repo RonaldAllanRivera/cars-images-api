@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Auth\MeController;
 use App\Http\Controllers\Api\V1\ErrorController;
 use App\Http\Controllers\Api\V1\HealthSummaryController;
 use App\Http\Controllers\Api\V1\ImageController;
+use App\Http\Controllers\Api\V1\ImportController;
 use App\Http\Controllers\Api\V1\ReviewImageController;
 use App\Http\Controllers\Api\V1\SearchController;
 use Illuminate\Support\Facades\Route;
@@ -40,6 +41,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('searches', [SearchController::class, 'index'])->name('searches.index');
             Route::get('searches/{search}', [SearchController::class, 'show'])->name('searches.show');
             Route::get('searches/{search}/images', [SearchController::class, 'images'])->name('searches.images');
+        });
+
+        Route::middleware(['ability:'.TokenAbilities::IMPORTS_READ, 'throttle:120,1'])->group(function () {
+            Route::get('imports', [ImportController::class, 'index'])->name('imports.index');
+            Route::get('imports/{import}', [ImportController::class, 'show'])->name('imports.show');
         });
 
         // Reaches Wikimedia, which has blocked this app before: the tightest
