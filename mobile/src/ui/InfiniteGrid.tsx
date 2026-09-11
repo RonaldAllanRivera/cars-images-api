@@ -28,6 +28,8 @@ interface Props<T> {
   numColumns?: number;
   emptyTitle: string;
   emptyHint?: string;
+  /** An empty screen is an invitation to act, where there is an act to offer. */
+  emptyAction?: { label: string; onPress: () => void };
 }
 
 export function InfiniteGrid<T>({
@@ -37,6 +39,7 @@ export function InfiniteGrid<T>({
   numColumns = 1,
   emptyTitle,
   emptyHint,
+  emptyAction,
 }: Props<T>) {
   const items = query.data?.pages.flatMap((page) => page.data) ?? [];
 
@@ -73,7 +76,7 @@ export function InfiniteGrid<T>({
             }
           />
         ) : (
-          <EmptyState title={emptyTitle} hint={emptyHint} />
+          <EmptyState title={emptyTitle} hint={emptyHint} action={emptyAction} />
         )
       }
       ListFooterComponent={

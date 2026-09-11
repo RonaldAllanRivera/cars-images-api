@@ -10,6 +10,14 @@ export interface ImageFilters {
   download_status?: 'not_downloaded' | 'downloading' | 'downloaded' | 'failed';
 }
 
+export interface SearchFilters {
+  status?: SearchStatus;
+  /** The panel keeps CSV-derived and ad-hoc searches in separate resources. */
+  source?: 'csv' | 'adhoc';
+  csv_import_id?: number;
+  coverage?: 'with_images' | 'no_images' | 'not_run';
+}
+
 export interface ErrorFilters {
   context?: ErrorContext;
   severity?: ErrorSeverity;
@@ -20,8 +28,10 @@ export const queryKeys = {
   image: (id: number) => ['images', id] as const,
   searchImages: (searchId: number, filters: ImageFilters = {}) =>
     ['searches', searchId, 'images', filters] as const,
-  searches: (status?: SearchStatus) => ['searches', { status }] as const,
+  searches: (filters: SearchFilters = {}) => ['searches', filters] as const,
   search: (id: number) => ['searches', id] as const,
+  imports: () => ['imports'] as const,
+  import: (id: number) => ['imports', id] as const,
   health: () => ['health'] as const,
   errors: (filters: ErrorFilters = {}) => ['errors', filters] as const,
 };

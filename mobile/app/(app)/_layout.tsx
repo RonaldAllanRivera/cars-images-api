@@ -16,6 +16,7 @@ import { PageTitle } from '@/ui/PageTitle';
 const ICON = {
   search: 'search',
   library: 'images',
+  pipeline: 'layers',
   review: 'checkmark-circle',
   health: 'pulse',
 } as const;
@@ -89,6 +90,15 @@ export default function AppLayout() {
           title: 'Library',
           headerShown: false,
           tabBarIcon: (props) => <TabIcon name="library" {...props} />,
+        }}
+      />
+      {/* headerShown: false - this tab nests a Stack, which owns the header. */}
+      <Tabs.Screen
+        name="pipeline"
+        options={{
+          title: 'Pipeline',
+          headerShown: false,
+          tabBarIcon: (props) => <TabIcon name="pipeline" {...props} />,
         }}
       />
       <Tabs.Screen
