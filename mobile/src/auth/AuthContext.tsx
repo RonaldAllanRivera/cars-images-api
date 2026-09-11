@@ -29,17 +29,30 @@ interface AuthValue {
  * verb that seeds hundreds of queries, and the web build keeps its token in
  * localStorage where any XSS on the origin can read it.
  *
+ * search:run also reaches web, amending P2. It advances rows that already
+ * exist and cannot create work - inventing a search needs search:write or
+ * imports:write - so its ceiling is "searches you already queued, run at a
+ * time you did not choose" rather than an unbounded crawl.
+ *
  * The server intersects rather than widens, so nothing here can grant more
  * than the account already has.
  */
 export const REQUESTED_ABILITIES = {
-  web: ['search:read', 'search:write', 'review:write', 'errors:read', 'imports:read'],
+  web: [
+    'search:read',
+    'search:write',
+    'review:write',
+    'errors:read',
+    'imports:read',
+    'search:run',
+  ],
   native: [
     'search:read',
     'search:write',
     'review:write',
     'errors:read',
     'imports:read',
+    'search:run',
     'imports:write',
   ],
 } as const;

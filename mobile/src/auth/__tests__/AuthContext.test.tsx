@@ -113,11 +113,19 @@ describe('the abilities each build asks for', () => {
     expect(REQUESTED_ABILITIES.native).toContain('imports:write');
   });
 
-  it('never asks for an ability no screen uses yet', () => {
-    // search:run arrives with P3b and exports:read with P4. Requesting either
-    // early would put it in a token before anything checks it.
+  it('asks for search:run on both builds', () => {
+    // Amended from P2, which withheld it from web. search:run advances rows
+    // that already exist and cannot create work - inventing a search needs
+    // search:write or imports:write - so it does not belong with the latter.
     for (const scope of Object.values(REQUESTED_ABILITIES)) {
-      expect(scope).not.toContain('search:run');
+      expect(scope).toContain('search:run');
+    }
+  });
+
+  it('never asks for an ability no screen uses yet', () => {
+    // exports:read arrives with P4. Requesting it early would put it in a
+    // token before anything checks it.
+    for (const scope of Object.values(REQUESTED_ABILITIES)) {
       expect(scope).not.toContain('exports:read');
     }
   });

@@ -34,4 +34,22 @@ class CsvImportPolicy
     {
         return true;
     }
+
+    /**
+     * Run this import's outstanding searches.
+     *
+     * Takes the import, not just the user, even though the check is currently
+     * permissive like its neighbours. The client names which import to run, so
+     * that object belongs in the authorization seam - a class-level check
+     * cannot express "not that one" no matter what is written inside it.
+     *
+     * There is no ownership model to enforce today: `imported_by` records who
+     * uploaded, not who owns, and every read endpoint already returns every
+     * import to every authenticated user. If ownership ever arrives, this
+     * method is where it goes, and the three read paths need it too.
+     */
+    public function run(User $user, CsvImport $import): bool
+    {
+        return true;
+    }
 }
