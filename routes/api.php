@@ -54,6 +54,13 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             ->middleware(['ability:'.TokenAbilities::SEARCH_WRITE, 'throttle:10,1'])
             ->name('searches.store');
 
+        // Seeds up to csv_import_max_combos searches, each of which is a future
+        // Wikimedia call, so the tightest authenticated limit - and
+        // imports:write is deliberately outside the web build's requested scope.
+        Route::post('imports', [ImportController::class, 'store'])
+            ->middleware(['ability:'.TokenAbilities::IMPORTS_WRITE, 'throttle:10,1'])
+            ->name('imports.store');
+
         Route::patch('images/{image}/review', ReviewImageController::class)
             ->middleware(['ability:'.TokenAbilities::REVIEW_WRITE, 'throttle:60,1'])
             ->name('images.review');
