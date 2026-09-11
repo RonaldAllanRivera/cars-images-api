@@ -107,6 +107,10 @@ with two implementations.
 Add to `tests/Feature/Api/ApiTestCase.php`:
 
 ```php
+    /**
+     * `imported_by` is NOT NULL, so an import always has an importer. Callers
+     * that do not care about who uploaded get one made for them.
+     */
     protected function csvImport(?User $importer = null, array $overrides = []): CsvImport
     {
         return CsvImport::create(array_merge([
@@ -114,14 +118,14 @@ Add to `tests/Feature/Api/ApiTestCase.php`:
             'total_rows' => 0,
             'unique_combos' => 0,
             'duplicates_skipped' => 0,
-            'imported_by' => $importer?->id,
+            'imported_by' => ($importer ?? User::factory()->create())->id,
         ], $overrides));
     }
 ```
 
-`ImportCoverageTest` does not extend `ApiTestCase` (it is a service test, not an
-API one), so it builds its rows with `CsvImport::create()` and `CarSearch::create()`
-directly — the same call the helpers make.
+`ImportCoverageTest` extends `ApiTestCase` for these helpers, not for anything
+HTTP. It lives under `tests/Feature/Services/` because it tests a service, but
+`ApiTestCase` is where the only row-builders in this project live.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -151,7 +155,7 @@ class ImportCoverageTest extends ApiTestCase
         $this->user = User::factory()->create();
     }
 
-    private function query(CsvImport $import, string $status, bool $withImage = false): CarSearch
+    private function csvSearch(CsvImport $import, string $status, bool $withImage = false): CarSearch
     {
         $search = $this->search($this->user, [
             'csv_import_id' => $import->id,
@@ -171,9 +175,9 @@ class ImportCoverageTest extends ApiTestCase
         // search that ran and found nothing is `completed`, exactly like one
         // that found five images.
         $import = $this->csvImport();
-        $this->query($import, 'completed', withImage: true);
-        $this->query($import, 'completed');
-        $this->query($import, 'pending');
+        $this->csvSearch($import, 'completed', withImage: true);
+        $this->csvSearch($import, 'completed');
+        $this->csvSearch($import, 'pending');
 
         $coverage = app(ImportCoverage::class)->for($import->id);
 
@@ -187,8 +191,8 @@ class ImportCoverageTest extends ApiTestCase
     public function test_it_counts_failures_separately(): void
     {
         $import = $this->csvImport();
-        $this->query($import, 'failed');
-        $this->query($import, 'completed', withImage: true);
+        $this->csvSearch($import, 'failed');
+        $this->csvSearch($import, 'completed', withImage: true);
 
         $coverage = app(ImportCoverage::class)->for($import->id);
 
@@ -204,7 +208,7 @@ class ImportCoverageTest extends ApiTestCase
         // `running` on this host means "a request died mid-search": there is
         // no worker, so nothing is advancing it. It is work still to do.
         $import = $this->csvImport();
-        $this->query($import, 'running');
+        $this->csvSearch($import, 'running');
 
         $this->assertSame(1, app(ImportCoverage::class)->for($import->id)['not_run']);
     }
@@ -213,8 +217,8 @@ class ImportCoverageTest extends ApiTestCase
     {
         $mine = $this->csvImport();
         $theirs = $this->csvImport();
-        $this->query($mine, 'completed', withImage: true);
-        $this->query($theirs, 'completed', withImage: true);
+        $this->csvSearch($mine, 'completed', withImage: true);
+        $this->csvSearch($theirs, 'completed', withImage: true);
 
         $this->assertSame(1, app(ImportCoverage::class)->for($mine->id)['total']);
     }
@@ -222,7 +226,7 @@ class ImportCoverageTest extends ApiTestCase
     public function test_a_null_import_covers_every_csv_derived_search(): void
     {
         $import = $this->csvImport();
-        $this->query($import, 'completed', withImage: true);
+        $this->csvSearch($import, 'completed', withImage: true);
         // Ad-hoc: no csv_import_id, and never part of coverage.
         $this->search($this->user, ['csv_import_id' => null, 'status' => 'completed']);
 
@@ -349,11 +353,21 @@ but delegates the counting:
 
 Run: `grep -rn 'notRun\|withImages\|noImages' resources/views/` to find every one.
 
-- [ ] **Step 6: Prove the panel is unchanged**
+- [ ] **Step 6: Unify the key casing, and expect one test to need updating**
+
+The counts move to snake_case to match the wire, which leaves `coverage()`
+returning a mix — snake counts beside the page's camelCase `importName`,
+`notRunUrl` and `noImagesUrl`. Rename those three too, in `Results.php`, the
+Blade, and the test. One array, one convention.
+
+`RunCoverageTest::test_coverage_separates_never_ran_from_found_nothing`
+asserts the key names directly, so it **does** need editing — the casing is
+part of `coverage()`'s contract with its only consumer, and this task changes
+it deliberately. That is the one edit; every other Filament test stays
+untouched, because the numbers are identical.
 
 Run: `docker run --rm -v "$PWD":/app -w /app cars-ci-php:8.3 php artisan test`
-Expected: PASS. Any Results-page test must be green **without being edited** —
-it asserts behaviour, and the behaviour did not change.
+Expected: PASS.
 
 - [ ] **Step 7: Pint and commit**
 

@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Auth\TokenAbilities;
 use App\Models\CarImage;
 use App\Models\CarSearch;
+use App\Models\CsvImport;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -55,6 +56,21 @@ abstract class ApiTestCase extends TestCase
             'images_per_year' => 5,
             'status' => 'completed',
             'requested_by' => $user->id,
+        ], $overrides));
+    }
+
+    /**
+     * `imported_by` is NOT NULL, so an import always has an importer. Callers
+     * that do not care about who uploaded get one made for them.
+     */
+    protected function csvImport(?User $importer = null, array $overrides = []): CsvImport
+    {
+        return CsvImport::create(array_merge([
+            'original_filename' => 'queries.csv',
+            'total_rows' => 0,
+            'unique_combos' => 0,
+            'duplicates_skipped' => 0,
+            'imported_by' => ($importer ?? User::factory()->create())->id,
         ], $overrides));
     }
 
