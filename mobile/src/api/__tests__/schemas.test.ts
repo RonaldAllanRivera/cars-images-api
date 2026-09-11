@@ -2,6 +2,8 @@ import errorsFixture from '../__fixtures__/errors.json';
 import healthFixture from '../__fixtures__/health.json';
 import imageFixture from '../__fixtures__/image.json';
 import imagesFixture from '../__fixtures__/images.json';
+import importFixture from '../__fixtures__/import.json';
+import importsFixture from '../__fixtures__/imports.json';
 import loginFixture from '../__fixtures__/login.json';
 import meFixture from '../__fixtures__/me.json';
 import reviewFixture from '../__fixtures__/review.json';
@@ -14,6 +16,7 @@ import {
   ErrorEventSchema,
   HealthSummarySchema,
   ImageSchema,
+  ImportSchema,
   LoginResponseSchema,
   SearchSchema,
   single,
@@ -23,6 +26,28 @@ import {
 } from '../schemas';
 
 describe('the API contract', () => {
+  it('parses the imports list', () => {
+    const parsed = cursorPage(ImportSchema).parse(importsFixture);
+
+    expect(parsed.data[0]?.original_filename).toBeTruthy();
+  });
+
+  it('parses an import with its coverage', () => {
+    const parsed = single(ImportSchema).parse(importFixture);
+
+    // `searched` is derived server-side, not stored. A client that recomputed
+    // it would drift from the panel's number.
+    expect(parsed.data.coverage?.searched).toBeDefined();
+  });
+
+  it('accepts an import whose coverage is null', () => {
+    // Null is what the server returns for an import with no searches; six
+    // zeroes would read as a broken import rather than an empty one.
+    expect(() =>
+      single(ImportSchema).parse({ data: { ...importFixture.data, coverage: null } }),
+    ).not.toThrow();
+  });
+
   it('accepts every ability the API can issue, including the privileged ones', () => {
     // P2 never requests these; P3's native build does. A narrow enum here
     // would throw on a login response that is entirely valid, which is the
