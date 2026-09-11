@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { Platform } from 'react-native';
 
 import { ApiError, apiRequest, configureApiClient } from '../api/client';
 import { LoginResponseSchema, single, UserSchema } from '../api/schemas';
@@ -14,6 +15,34 @@ interface AuthValue {
   signIn: (email: string, password: string, deviceName: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
+
+/**
+ * What each build asks for at login.
+ *
+ * The server's TokenAbilities::defaultScope() is frozen as a compatibility
+ * floor for clients that predate scoping; every current client declares what
+ * it needs, so the ability set can grow without the login response changing
+ * for anyone - and without the committed login fixture churning.
+ *
+ * imports:read reaches the web build because a Pipeline tab that 403s on the
+ * public demo is worse than no tab at all. imports:write does not: it is the
+ * verb that seeds hundreds of queries, and the web build keeps its token in
+ * localStorage where any XSS on the origin can read it.
+ *
+ * The server intersects rather than widens, so nothing here can grant more
+ * than the account already has.
+ */
+export const REQUESTED_ABILITIES = {
+  web: ['search:read', 'search:write', 'review:write', 'errors:read', 'imports:read'],
+  native: [
+    'search:read',
+    'search:write',
+    'review:write',
+    'errors:read',
+    'imports:read',
+    'imports:write',
+  ],
+} as const;
 
 const AuthContext = createContext<AuthValue | null>(null);
 
@@ -97,7 +126,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (email: string, password: string, deviceName: string) => {
     const result = await apiRequest('/auth/login', {
       method: 'POST',
-      body: { email, password, device_name: deviceName },
+      body: {
+        email,
+        password,
+        device_name: deviceName,
+        abilities: [...(Platform.OS === 'web' ? REQUESTED_ABILITIES.web : REQUESTED_ABILITIES.native)],
+      },
       schema: LoginResponseSchema,
     });
 
