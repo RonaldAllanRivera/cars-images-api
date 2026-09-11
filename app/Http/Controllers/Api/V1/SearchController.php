@@ -23,11 +23,8 @@ class SearchController extends Controller
     {
         Gate::authorize('viewAny', CarSearch::class);
 
-        $status = $request->validated()['status'] ?? null;
-
-        $searches = CarSearch::query()
+        $searches = $request->apply(CarSearch::query())
             ->withCount('images')
-            ->when($status !== null, fn ($query) => $query->where('status', $status))
             ->orderByDesc('id')
             ->cursorPaginate($request->perPage())
             ->withQueryString();
