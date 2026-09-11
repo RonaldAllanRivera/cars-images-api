@@ -63,18 +63,20 @@ safety net, and the reason that test must stay green **without regeneration**.
 | Unknown ability | **422** | Typos become errors rather than silently-narrowed tokens. |
 | Policies | **Deferred to P3/P4** | A policy with no caller is dead code whose shape depends on the endpoint it will guard. |
 | `abilities` on `/auth/me` | **Deferred to P3** | Needed for conditional UI, not for issuance. |
-| Web vs native scope | **Web keeps the legacy four; native adds the privileged four** — the intended split, *implemented in P3* | Corrects the programme brainstorm, which said web should hold "read + review only". That would drop `search:write` and break the search form, which is the entire public demo. P2 changes no client behaviour: both builds continue to omit `abilities` and receive `defaultScope()`. |
+| Web vs native scope | **Web keeps the legacy four; native adds the privileged four** — the intended split, *implemented in P3*. **Later amended: `imports:read` (P3a) and `search:run` (P3b) also reach web.** | Corrects the programme brainstorm, which said web should hold "read + review only". That would drop `search:write` and break the search form, which is the entire public demo. P2 changes no client behaviour: both builds continue to omit `abilities` and receive `defaultScope()`. |
 
 ### On the web/native split
 
-The four privileged abilities are the ones that must never reach a token in
-`localStorage`:
+The four privileged abilities were carved out as the ones that must never reach
+a token in `localStorage`. Two of them since have — see the amendment below —
+but the reasoning that separated them from the legacy four still holds, and the
+table is what that reasoning was weighed against:
 
 | Ability | What a stolen token could do |
 |---|---|
 | `imports:read` | Read what `search:read` already exposes. Negligible on its own; grouped for symmetry. |
 | `imports:write` | Seed up to 500 queries. Creates rows, destroys nothing. |
-| `search:run` | Drive a long paced run against Wikimedia — the thing `wikimedia_block_events` exists to record. |
+| `search:run` | Advance existing `pending` rows against Wikimedia. **Amended 2026-09-11 — see below.** |
 | `exports:read` | Exfiltrate the library's metadata in one request. |
 
 The existing four already reach `localStorage` today and continue to. Nothing
@@ -87,7 +89,31 @@ images by [`StoreSearchRequest`](../../../app/Http/Requests/Api/V1/StoreSearchRe
 and `config('cars-images.api_search_max_*')`. `search:run` drives an unbounded
 queue of pre-existing rows. Same Wikimedia exposure per request, wildly
 different exposure per token — collapsing them would let the search form's
-token drive a 500-query run.
+token drive a 500-query run. **They stay separate abilities even though both
+now reach web:** the distinction is what makes it possible to withhold one
+later without withholding the other.
+
+### Amendment, 2026-09-11: `search:run` reaches the web build
+
+This spec put `search:run` in the never-on-web set. [P3b](2026-09-11-bulk-run-design.md)
+reverses that, and the reasoning is recorded here so this document does not
+contradict the code.
+
+**`search:run` cannot create work.** It advances `pending` rows that already
+exist. A stolen web token cannot invent searches: that needs `search:write`
+(already on web, capped at four years by five images per call) or
+`imports:write` (still native-only). The ceiling is *searches you already
+queued, run at a time you did not choose* — not *an attacker crawls Wikimedia
+at will*, which is how this spec originally framed it.
+
+The residual risk stands and is accepted: a stolen `localStorage` token could
+drain a large pending queue faster than intended. Server-side pacing and the
+route throttle bound the rate. The web build is the public demo, and a Pipeline
+tab whose central verb 403s would be worse.
+
+`imports:write` and `exports:read` remain outside the web build's scope.
+Uploading seeds hundreds of new queries and exporting hands over the library;
+neither merely advances work already queued.
 
 ## Design
 

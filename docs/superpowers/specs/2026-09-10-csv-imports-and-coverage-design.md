@@ -95,6 +95,10 @@ Instead:
 | Web | `search:read`, `search:write`, `review:write`, `errors:read`, `imports:read` |
 | Native | those five plus `imports:write` |
 
+**Amended 2026-09-11:** both builds also request `search:run`, added by
+[P3b](2026-09-11-bulk-run-design.md) — it advances existing rows and cannot
+create work, so it is not in the same class as `imports:write`.
+
 P2 already widened `TokenAbilitySchema` to all eight, so the response parses
 today. The only client change is `AuthContext.signIn` passing an `abilities`
 array — and because the fixture capture posts no `abilities`,
