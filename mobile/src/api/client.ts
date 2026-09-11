@@ -86,12 +86,21 @@ async function send(
 
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+
+  /*
+   * FormData passes through untouched, and deliberately without a
+   * Content-Type: multipart needs a boundary, the runtime generates it when it
+   * serialises the body, and a hand-written `multipart/form-data` header omits
+   * it - the server then sees no parts and reports a missing file, which reads
+   * to the user as "your CSV is invalid".
+   */
+  const isMultipart = body instanceof FormData;
+  if (body !== undefined && !isMultipart) headers['Content-Type'] = 'application/json';
 
   const response = await fetch(buildUrl(path, query), {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : isMultipart ? body : JSON.stringify(body),
   });
 
   // A 204 carries no body at all, so response.json() would reject. Reading it
