@@ -17,6 +17,7 @@ import {
   HealthSummarySchema,
   ImageSchema,
   ImportSchema,
+  RunChunkResponseSchema,
   LoginResponseSchema,
   SearchSchema,
   single,
@@ -26,6 +27,42 @@ import {
 } from '../schemas';
 
 describe('the API contract', () => {
+  it('parses a chunk response', () => {
+    const parsed = RunChunkResponseSchema.parse({
+      outcomes: [{ id: 1, make: 'Honda', model: 'Civic', from_year: 1998, outcome: 'completed' }],
+      ran_seconds: 8.4,
+      remaining: 21,
+      blocked: null,
+    });
+
+    expect(parsed.remaining).toBe(21);
+  });
+
+  it('parses a blocked chunk', () => {
+    // The block path matters most and is exercised by hand least often.
+    const parsed = RunChunkResponseSchema.parse({
+      outcomes: [],
+      ran_seconds: 3.1,
+      remaining: 21,
+      blocked: { status: 429, retry_after_seconds: 600 },
+    });
+
+    expect(parsed.blocked?.retry_after_seconds).toBe(600);
+  });
+
+  it('accepts a block with no retry window', () => {
+    // Wikimedia does not always send Retry-After, and the exception's field is
+    // nullable - a schema that required it would fail to parse a real block.
+    expect(() =>
+      RunChunkResponseSchema.parse({
+        outcomes: [],
+        ran_seconds: 0.2,
+        remaining: 5,
+        blocked: { status: 403, retry_after_seconds: null },
+      }),
+    ).not.toThrow();
+  });
+
   it('parses the imports list', () => {
     const parsed = cursorPage(ImportSchema).parse(importsFixture);
 

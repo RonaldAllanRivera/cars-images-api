@@ -158,6 +158,35 @@ export const ImportSchema = z.object({
 });
 export type Import = z.infer<typeof ImportSchema>;
 
+/**
+ * One search's result inside a bulk-run chunk.
+ *
+ * No `skipped`: the server re-selects from the database each call rather than
+ * draining a queue captured at start, so a row deleted or finished by someone
+ * else is simply not selected. There is nothing to skip.
+ */
+export const RunOutcomeSchema = z.object({
+  id: z.number().int(),
+  make: z.string(),
+  model: z.string().nullable(),
+  from_year: z.number().int(),
+  outcome: z.enum(['completed', 'failed']),
+});
+export type RunOutcome = z.infer<typeof RunOutcomeSchema>;
+
+export const RunChunkResponseSchema = z.object({
+  outcomes: z.array(RunOutcomeSchema),
+  ran_seconds: z.number(),
+  /** Recounted server-side after the slice, so it survives a dropped response. */
+  remaining: z.number().int(),
+  // Wikimedia does not always send Retry-After, so the window is nullable even
+  // when a block did happen.
+  blocked: z
+    .object({ status: z.number().int(), retry_after_seconds: z.number().int().nullable() })
+    .nullable(),
+});
+export type RunChunkResponse = z.infer<typeof RunChunkResponseSchema>;
+
 export const LoginResponseSchema = z.object({
   token: z.string(),
   token_type: z.literal('Bearer'),
