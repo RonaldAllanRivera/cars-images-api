@@ -3,8 +3,8 @@
         ? (int) round(100 * $coverage['searched'] / $coverage['total'])
         : 0;
 
-    $isComplete = $coverage['notRun'] === 0 && $coverage['failed'] === 0;
-    $scope = $coverage['importName'] ?? 'All CSV imports';
+    $isComplete = $coverage['not_run'] === 0 && $coverage['failed'] === 0;
+    $scope = $coverage['import_name'] ?? 'All CSV imports';
 @endphp
 
 {{--
@@ -25,18 +25,18 @@
     :heading="$scope . ' — ' . $coverage['searched'] . ' of ' . $coverage['total'] . ' searches run'"
 >
     <x-slot name="description">
-        {{ $coverage['withImages'] }} found images
+        {{ $coverage['with_images'] }} found images
 
-        @if ($coverage['noImages'] > 0)
-            &middot; {{ $coverage['noImages'] }} ran and found nothing
+        @if ($coverage['no_images'] > 0)
+            &middot; {{ $coverage['no_images'] }} ran and found nothing
         @endif
 
         @if ($coverage['failed'] > 0)
             &middot; {{ $coverage['failed'] }} failed
         @endif
 
-        @if ($coverage['notRun'] > 0)
-            &middot; {{ $coverage['notRun'] }} not run yet.
+        @if ($coverage['not_run'] > 0)
+            &middot; {{ $coverage['not_run'] }} not run yet.
             Rows that were never searched have no images to show, so this list is incomplete.
         @else
             .
@@ -56,26 +56,26 @@
     </x-slot>
 
     <x-slot name="controls">
-        @if ($coverage['notRun'] > 0)
+        @if ($coverage['not_run'] > 0)
             <x-filament::button
                 size="sm"
                 color="primary"
                 icon="heroicon-o-play"
                 tag="a"
-                :href="$coverage['notRunUrl']"
+                :href="$coverage['not_run_url']"
             >
-                Run {{ $coverage['notRun'] }} not yet searched
+                Run {{ $coverage['not_run'] }} not yet searched
             </x-filament::button>
         @endif
 
-        @if ($coverage['noImages'] > 0)
+        @if ($coverage['no_images'] > 0)
             <x-filament::button
                 size="sm"
                 color="gray"
                 tag="a"
-                :href="$coverage['noImagesUrl']"
+                :href="$coverage['no_images_url']"
             >
-                Review {{ $coverage['noImages'] }} empty
+                Review {{ $coverage['no_images'] }} empty
             </x-filament::button>
         @endif
     </x-slot>

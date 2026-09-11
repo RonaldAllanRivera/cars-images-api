@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 import * as client from '../../api/client';
-import { AuthProvider, useAuth } from '../AuthContext';
+import { AuthProvider, REQUESTED_ABILITIES, useAuth } from '../AuthContext';
 import { tokenStore } from '../TokenStore';
 
 const wrapper = ({ children }: { children: ReactNode }) => <AuthProvider>{children}</AuthProvider>;
@@ -98,5 +98,37 @@ describe('useAuth', () => {
     // token the server has already forgotten.
     expect(result.current.status).toBe('anonymous');
     expect(await tokenStore.get()).toBeNull();
+  });
+});
+
+describe('the abilities each build asks for', () => {
+  it('asks for imports:read but never imports:write on web', () => {
+    // The Pipeline tab has to work on the public demo, so imports:read reaches
+    // localStorage. imports:write seeds hundreds of queries and does not.
+    expect(REQUESTED_ABILITIES.web).toContain('imports:read');
+    expect(REQUESTED_ABILITIES.web).not.toContain('imports:write');
+  });
+
+  it('asks for the upload ability on native', () => {
+    expect(REQUESTED_ABILITIES.native).toContain('imports:write');
+  });
+
+  it('never asks for an ability no screen uses yet', () => {
+    // search:run arrives with P3b and exports:read with P4. Requesting either
+    // early would put it in a token before anything checks it.
+    for (const scope of Object.values(REQUESTED_ABILITIES)) {
+      expect(scope).not.toContain('search:run');
+      expect(scope).not.toContain('exports:read');
+    }
+  });
+
+  it('keeps the four the server issues by default', () => {
+    // Narrowing below defaultScope() would silently break screens that work
+    // today - the server intersects, it does not widen.
+    for (const scope of Object.values(REQUESTED_ABILITIES)) {
+      for (const ability of ['search:read', 'search:write', 'review:write', 'errors:read']) {
+        expect(scope).toContain(ability);
+      }
+    }
   });
 });

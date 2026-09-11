@@ -81,7 +81,7 @@ describe('<AppLayout />', () => {
     render(<AppLayout />);
 
     expect(screen.queryByText('redirect:/login')).toBeNull();
-    for (const tab of ['Search', 'Library', 'Review', 'Health']) {
+    for (const tab of ['Search', 'Library', 'Pipeline', 'Review', 'Health']) {
       expect(screen.getByText(tab)).toBeTruthy();
     }
   });
@@ -94,6 +94,6 @@ describe('<AppLayout />', () => {
 
     render(<AppLayout />);
 
-    expect(screen.getAllByTestId('tab-icon')).toHaveLength(4);
+    expect(screen.getAllByTestId('tab-icon')).toHaveLength(5);
   });
 });

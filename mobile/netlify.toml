@@ -23,6 +23,11 @@
 # through inside the app still worked - only a hard navigation showed it.
 # scripts/check-netlify-redirects.mjs now fails the build on that drift.
 [[redirects]]
+  from = "/pipeline/:id"
+  to = "/pipeline/[id].html"
+  status = 200
+
+[[redirects]]
   from = "/search/runs/:id"
   to = "/search/runs/[id].html"
   status = 200

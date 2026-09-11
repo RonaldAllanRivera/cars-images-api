@@ -84,7 +84,22 @@ class ContractFixturesTest extends ApiTestCase
             'password' => bcrypt('password'),
         ]);
 
-        $search = $this->search($user, ['status' => 'completed']);
+        /*
+         * The fixture search belongs to an import, so the coverage fixture has
+         * something real to describe. A second, unrun search under the same
+         * import gives coverage both a with_images row and a not_run one -
+         * six zeroes would pin nothing.
+         */
+        $import = $this->csvImport($user, ['total_rows' => 2, 'unique_combos' => 2]);
+
+        $search = $this->search($user, ['status' => 'completed', 'csv_import_id' => $import->id]);
+
+        $this->search($user, [
+            'status' => 'pending',
+            'csv_import_id' => $import->id,
+            'make' => 'Honda',
+            'model' => 'Civic',
+        ]);
 
         $reviewed = $this->image($search, [
             'provider_image_id' => 'fixture-a',
@@ -140,6 +155,8 @@ class ContractFixturesTest extends ApiTestCase
             'images' => $this->getJson('/api/v1/images?per_page=1')->assertOk()->json(),
             'search' => $this->getJson("/api/v1/searches/{$search->id}")->assertOk()->json(),
             'searches' => $this->getJson('/api/v1/searches')->assertOk()->json(),
+            'imports' => $this->getJson('/api/v1/imports?per_page=1')->assertOk()->json(),
+            'import' => $this->getJson("/api/v1/imports/{$import->id}")->assertOk()->json(),
             'errors' => $this->getJson('/api/v1/errors')->assertOk()->json(),
             'health' => $this->getJson('/api/v1/health/summary')->assertOk()->json(),
             'validation-error' => $this->postJson('/api/v1/searches', [

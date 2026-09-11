@@ -100,11 +100,11 @@ class RunCoverageTest extends TestCase
             ->coverage();
 
         $this->assertSame(4, $coverage['total']);
-        $this->assertSame(1, $coverage['notRun']);
+        $this->assertSame(1, $coverage['not_run']);
         $this->assertSame(3, $coverage['searched']);
         $this->assertSame(1, $coverage['failed']);
-        $this->assertSame(1, $coverage['withImages']);
-        $this->assertSame(1, $coverage['noImages']);
+        $this->assertSame(1, $coverage['with_images']);
+        $this->assertSame(1, $coverage['no_images']);
     }
 
     public function test_coverage_is_null_when_there_is_no_import_to_describe(): void
@@ -141,7 +141,7 @@ class RunCoverageTest extends TestCase
             ->instance()
             ->coverage();
 
-        $this->assertSame('cars.csv', $coverage['importName']);
+        $this->assertSame('cars.csv', $coverage['import_name']);
         $this->assertSame(4, $coverage['total']);
     }
 
@@ -162,13 +162,13 @@ class RunCoverageTest extends TestCase
 
         $this->assertStringContainsString(
             urlencode('filters[coverage][value]').'=not_run',
-            $coverage['notRunUrl'],
+            $coverage['not_run_url'],
         );
         $this->assertStringContainsString(
             urlencode('filters[coverage][value]').'=no_images',
-            $coverage['noImagesUrl'],
+            $coverage['no_images_url'],
         );
-        $this->assertStringNotContainsString('tableFilters', $coverage['notRunUrl']);
+        $this->assertStringNotContainsString('tableFilters', $coverage['not_run_url']);
     }
 
     public function test_no_images_filter_lists_only_searches_that_ran_and_found_nothing(): void

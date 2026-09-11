@@ -77,4 +77,98 @@ class SearchesTest extends ApiTestCase
         $only = $this->getJson("/api/v1/searches/{$mine->id}/images?review_status=approved")->assertOk()->json('data.*.id');
         $this->assertSame([$approved->id], $only);
     }
+
+    public function test_it_filters_to_csv_derived_searches(): void
+    {
+        // The panel splits these into two resources on exactly this column;
+        // the API returned them merged, so the mobile Runs list showed both.
+        $user = $this->actingAsApiUser();
+        $import = $this->csvImport();
+        $fromCsv = $this->search($user, ['csv_import_id' => $import->id]);
+        $this->search($user, ['csv_import_id' => null]);
+
+        $this->getJson('/api/v1/searches?source=csv')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $fromCsv->id);
+    }
+
+    public function test_it_filters_to_ad_hoc_searches(): void
+    {
+        $user = $this->actingAsApiUser();
+        $import = $this->csvImport();
+        $this->search($user, ['csv_import_id' => $import->id]);
+        $adHoc = $this->search($user, ['csv_import_id' => null]);
+
+        $this->getJson('/api/v1/searches?source=adhoc')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $adHoc->id);
+    }
+
+    public function test_it_filters_by_import(): void
+    {
+        $user = $this->actingAsApiUser();
+        $mine = $this->csvImport();
+        $theirs = $this->csvImport();
+        $wanted = $this->search($user, ['csv_import_id' => $mine->id]);
+        $this->search($user, ['csv_import_id' => $theirs->id]);
+
+        $this->getJson("/api/v1/searches?csv_import_id={$mine->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $wanted->id);
+    }
+
+    public function test_coverage_no_images_finds_searches_that_ran_and_found_nothing(): void
+    {
+        // The question `status` cannot answer: both of these are `completed`.
+        $user = $this->actingAsApiUser();
+        $found = $this->search($user, ['status' => 'completed']);
+        $this->image($found);
+        $empty = $this->search($user, ['status' => 'completed']);
+
+        $this->getJson('/api/v1/searches?coverage=no_images')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $empty->id);
+    }
+
+    public function test_coverage_not_run_includes_running(): void
+    {
+        // No worker on this host: a row left `running` is a dead request, not
+        // work in progress.
+        $user = $this->actingAsApiUser();
+        $pending = $this->search($user, ['status' => 'pending']);
+        $running = $this->search($user, ['status' => 'running']);
+        $this->search($user, ['status' => 'completed']);
+
+        $response = $this->getJson('/api/v1/searches?coverage=not_run')->assertOk();
+
+        $this->assertEqualsCanonicalizing(
+            [$pending->id, $running->id],
+            array_column($response->json('data'), 'id'),
+        );
+    }
+
+    public function test_an_unfiltered_list_still_returns_everything(): void
+    {
+        // The three new parameters are all `sometimes`; nothing already
+        // deployed shifts because they were added.
+        $user = $this->actingAsApiUser();
+        $import = $this->csvImport();
+        $this->search($user, ['csv_import_id' => $import->id]);
+        $this->search($user, ['csv_import_id' => null]);
+
+        $this->getJson('/api/v1/searches')->assertOk()->assertJsonCount(2, 'data');
+    }
+
+    public function test_it_rejects_an_unknown_coverage_value(): void
+    {
+        $this->actingAsApiUser();
+
+        $this->getJson('/api/v1/searches?coverage=maybe')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['coverage']);
+    }
 }

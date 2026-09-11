@@ -1,7 +1,7 @@
 {
     "data": {
         "searches_by_status": {
-            "pending": 0,
+            "pending": 1,
             "running": 0,
             "completed": 1,
             "failed": 0

@@ -127,6 +127,37 @@ export const HealthSummarySchema = z.object({
 export type HealthSummary = z.infer<typeof HealthSummarySchema>;
 
 /** POST /auth/login is the ONE endpoint with no `data` envelope. */
+/**
+ * The six coverage counts. `searched` is derived server-side (total minus
+ * not_run) rather than recomputed here, so the app and the panel cannot
+ * disagree about what "searched" means.
+ */
+export const CoverageSchema = z.object({
+  total: z.number().int(),
+  searched: z.number().int(),
+  not_run: z.number().int(),
+  failed: z.number().int(),
+  with_images: z.number().int(),
+  no_images: z.number().int(),
+});
+export type Coverage = z.infer<typeof CoverageSchema>;
+
+export const ImportSchema = z.object({
+  id: z.number().int(),
+  original_filename: z.string(),
+  total_rows: z.number().int().nullable(),
+  unique_combos: z.number().int().nullable(),
+  duplicates_skipped: z.number().int().nullable(),
+  imported_by: z.number().int().nullable(),
+  importer_name: z.string().nullable().optional(),
+  searches_count: z.number().int().optional(),
+  // Absent on the list, present-and-nullable on the detail: null is what the
+  // server returns for an import with no searches yet.
+  coverage: CoverageSchema.nullable().optional(),
+  created_at: z.string().nullable(),
+});
+export type Import = z.infer<typeof ImportSchema>;
+
 export const LoginResponseSchema = z.object({
   token: z.string(),
   token_type: z.literal('Bearer'),

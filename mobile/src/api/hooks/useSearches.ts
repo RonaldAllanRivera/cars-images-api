@@ -2,19 +2,24 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { apiRequest } from '../client';
 import { queryKeys } from '../queryKeys';
+import type { SearchFilters } from '../queryKeys';
 import { cursorPage, SearchSchema, single } from '../schemas';
-import type { SearchStatus } from '../schemas';
 
 const searchPage = cursorPage(SearchSchema);
 const oneSearch = single(SearchSchema);
 
-export function useSearches(status?: SearchStatus) {
+/**
+ * A filters object rather than a bare status: the Pipeline tab needs `source`,
+ * `csv_import_id` and `coverage`, and the Search tab needs `source: 'adhoc'`
+ * so the two stop showing each other's runs.
+ */
+export function useSearches(filters: SearchFilters = {}) {
   return useInfiniteQuery({
-    queryKey: queryKeys.searches(status),
+    queryKey: queryKeys.searches(filters),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) =>
       apiRequest('/searches', {
-        query: { status, cursor: pageParam ?? undefined },
+        query: { ...filters, cursor: pageParam ?? undefined },
         schema: searchPage,
       }),
     getNextPageParam: (lastPage) => lastPage.meta.next_cursor,

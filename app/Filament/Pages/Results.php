@@ -7,6 +7,7 @@ use App\Models\CarSearch;
 use App\Models\CsvImport;
 use App\Services\Downloads\BatchCsvExporter;
 use App\Services\Downloads\BatchZipBuilder;
+use App\Services\Imports\ImportCoverage;
 use BackedEnum;
 use Filament\Actions;
 use Filament\Notifications\Notification;
@@ -267,46 +268,33 @@ class Results extends Page implements HasTable
     /**
      * How much of the CSV import in view has actually been searched.
      *
-     * This table can only show images that exist, so a run that stopped
-     * early and a run that finished having found little look identical:
-     * both render a short list under a confident "Showing 1 to N of N
-     * results". Counting the *searches* behind those rows separates the
-     * two — how many never ran, and how many ran and came back empty.
+     * The counting lives in ImportCoverage so the panel and the API cannot
+     * drift; what stays here is what only a Filament page has - the import's
+     * name for the heading, and the deep links that turn "23 not run yet"
+     * into exactly those 23 rows, ready to run.
      *
      * Null when there is nothing to describe, which hides the panel.
      *
-     * @return array{importName: ?string, total: int, searched: int, notRun: int, failed: int, withImages: int, noImages: int, notRunUrl: string, noImagesUrl: string}|null
+     * @return array{total: int, searched: int, not_run: int, failed: int, with_images: int, no_images: int, import_name: ?string, not_run_url: string, no_images_url: string}|null
      */
     public function coverage(): ?array
     {
         $importId = $this->coverageImportId();
+        $counts = app(ImportCoverage::class)->for($importId);
 
-        // Re-built per count rather than cloned: `whereHas` on a shared
-        // builder would leak its subquery into the counts that follow.
-        $searches = fn (): Builder => CarSearch::query()
-            ->whereNotNull('csv_import_id')
-            ->when($importId !== null, fn (Builder $q) => $q->where('csv_import_id', $importId));
-
-        $total = $searches()->count();
-
-        if ($total === 0) {
+        if ($counts === null) {
             return null;
         }
 
-        $notRun = $searches()->whereIn('status', ['pending', 'running'])->count();
-
-        return [
-            'importName' => $importId === null
+        // The page's own concerns, layered on the shared counts: the import's
+        // name, and deep links into the filtered Search Queries list. Neither
+        // means anything to an API client, which is why they stayed here.
+        return $counts + [
+            'import_name' => $importId === null
                 ? null
                 : CsvImport::whereKey($importId)->value('original_filename'),
-            'total' => $total,
-            'searched' => $total - $notRun,
-            'notRun' => $notRun,
-            'failed' => $searches()->where('status', 'failed')->count(),
-            'withImages' => $searches()->whereHas('images')->count(),
-            'noImages' => $searches()->where('status', 'completed')->whereDoesntHave('images')->count(),
-            'notRunUrl' => $this->searchQueriesUrl($importId, 'not_run'),
-            'noImagesUrl' => $this->searchQueriesUrl($importId, 'no_images'),
+            'not_run_url' => $this->searchQueriesUrl($importId, 'not_run'),
+            'no_images_url' => $this->searchQueriesUrl($importId, 'no_images'),
         ];
     }
 

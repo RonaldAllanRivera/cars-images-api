@@ -13,7 +13,13 @@ const STATUSES: (SearchStatus | 'all')[] = ['all', 'pending', 'running', 'comple
 
 export default function Runs() {
   const [status, setStatus] = useState<SearchStatus | 'all'>('all');
-  const query = useSearches(status === 'all' ? undefined : status);
+  // source: 'adhoc' - runs started from the form on this tab. CSV-derived
+  // queries live under Pipeline, which is the split the panel already makes
+  // between CarSearchResource and SearchQueryResource.
+  const query = useSearches({
+    source: 'adhoc',
+    ...(status === 'all' ? {} : { status }),
+  });
 
   return (
     <Screen>

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Auth\MeController;
 use App\Http\Controllers\Api\V1\ErrorController;
 use App\Http\Controllers\Api\V1\HealthSummaryController;
 use App\Http\Controllers\Api\V1\ImageController;
+use App\Http\Controllers\Api\V1\ImportController;
 use App\Http\Controllers\Api\V1\ReviewImageController;
 use App\Http\Controllers\Api\V1\SearchController;
 use Illuminate\Support\Facades\Route;
@@ -42,11 +43,23 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('searches/{search}/images', [SearchController::class, 'images'])->name('searches.images');
         });
 
+        Route::middleware(['ability:'.TokenAbilities::IMPORTS_READ, 'throttle:120,1'])->group(function () {
+            Route::get('imports', [ImportController::class, 'index'])->name('imports.index');
+            Route::get('imports/{import}', [ImportController::class, 'show'])->name('imports.show');
+        });
+
         // Reaches Wikimedia, which has blocked this app before: the tightest
         // authenticated limit, on top of the size caps in StoreSearchRequest.
         Route::post('searches', [SearchController::class, 'store'])
             ->middleware(['ability:'.TokenAbilities::SEARCH_WRITE, 'throttle:10,1'])
             ->name('searches.store');
+
+        // Seeds up to csv_import_max_combos searches, each of which is a future
+        // Wikimedia call, so the tightest authenticated limit - and
+        // imports:write is deliberately outside the web build's requested scope.
+        Route::post('imports', [ImportController::class, 'store'])
+            ->middleware(['ability:'.TokenAbilities::IMPORTS_WRITE, 'throttle:10,1'])
+            ->name('imports.store');
 
         Route::patch('images/{image}/review', ReviewImageController::class)
             ->middleware(['ability:'.TokenAbilities::REVIEW_WRITE, 'throttle:60,1'])
