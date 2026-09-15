@@ -8,6 +8,7 @@ export interface ImageFilters {
   year_confirmed?: boolean;
   review_status?: ReviewStatus;
   download_status?: 'not_downloaded' | 'downloading' | 'downloaded' | 'failed';
+  csv_import_id?: number;
 }
 
 export interface SearchFilters {
@@ -25,6 +26,9 @@ export interface ErrorFilters {
 
 export const queryKeys = {
   images: (filters: ImageFilters = {}) => ['images', filters] as const,
+  // 'count' as its own segment so it can never collide with images(filters)
+  // or image(id), which share the 'images' prefix.
+  imageCount: (filters: ImageFilters = {}) => ['images', 'count', filters] as const,
   image: (id: number) => ['images', id] as const,
   searchImages: (searchId: number, filters: ImageFilters = {}) =>
     ['searches', searchId, 'images', filters] as const,

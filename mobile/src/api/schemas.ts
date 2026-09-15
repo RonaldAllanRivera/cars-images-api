@@ -188,6 +188,16 @@ export const RunChunkResponseSchema = z.object({
 });
 export type RunChunkResponse = z.infer<typeof RunChunkResponseSchema>;
 
+export const ImageCountSchema = z.object({ count: z.number().int() });
+
+export const ExportLinkSchema = z.object({
+  url: z.string().url(),
+  expires_at: z.string(),
+  count: z.number().int(),
+  format: z.enum(['csv', 'zip']),
+});
+export type ExportLink = z.infer<typeof ExportLinkSchema>;
+
 export const LoginResponseSchema = z.object({
   token: z.string(),
   token_type: z.literal('Bearer'),

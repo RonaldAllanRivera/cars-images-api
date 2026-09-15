@@ -67,6 +67,21 @@ describe('apiRequest', () => {
     expect(url).not.toContain('color=');
   });
 
+  it('sends a false boolean rather than omitting it', async () => {
+    // The dangerous case, and the one the test above does not cover. A filter
+    // builder written as `if (value)` would drop `false`, so make_confirmed=false
+    // would never reach the server: the export count would show every image
+    // while the export itself returned only the not-matched ones. Only null,
+    // undefined and '' may be omitted.
+    jest.mocked(global.fetch).mockReturnValueOnce(json({ count: 0 }));
+
+    await apiRequest('/images/count', { query: { make_confirmed: false, year_confirmed: false } });
+
+    const url = String(jest.mocked(global.fetch).mock.calls[0]![0]);
+    expect(url).toContain('make_confirmed=false');
+    expect(url).toContain('year_confirmed=false');
+  });
+
   it('validates the response against the schema', async () => {
     jest.mocked(global.fetch).mockReturnValueOnce(json({ id: 1, name: 'Ada' }));
 
