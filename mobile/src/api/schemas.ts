@@ -44,6 +44,7 @@ export const TokenAbilitySchema = z.enum([
   'search:run',
   'exports:read',
 ]);
+export type TokenAbility = z.infer<typeof TokenAbilitySchema>;
 
 export const UserSchema = z.object({
   id: z.number().int(),
