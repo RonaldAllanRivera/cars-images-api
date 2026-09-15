@@ -53,6 +53,7 @@ class ListImagesRequest extends FormRequest
             'year_confirmed' => ['sometimes', 'boolean'],
             'review_status' => ['sometimes', Rule::in(CarImage::reviewStatuses())],
             'download_status' => ['sometimes', Rule::in(['not_downloaded', 'downloading', 'downloaded', 'failed'])],
+            'csv_import_id' => ['sometimes', 'integer', 'exists:csv_imports,id'],
         ] + $this->paginationRules();
     }
 
@@ -79,6 +80,12 @@ class ListImagesRequest extends FormRequest
             if (array_key_exists($column, $filters)) {
                 $query->where($column, $this->boolean($column));
             }
+        }
+
+        // Through the search, not a column on the image: an image belongs to a
+        // search, and the search to an import.
+        if (array_key_exists('csv_import_id', $filters)) {
+            $query->whereHas('search', fn (Builder $q) => $q->where('csv_import_id', $filters['csv_import_id']));
         }
 
         return $query;

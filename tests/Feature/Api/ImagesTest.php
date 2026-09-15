@@ -126,4 +126,56 @@ class ImagesTest extends ApiTestCase
         $this->getJson('/api/v1/images/999999')->assertNotFound()
             ->assertJsonStructure(['message']);
     }
+
+    public function test_it_filters_images_by_csv_import(): void
+    {
+        $user = $this->actingAsApiUser();
+        $mine = $this->csvImport($user);
+        $theirs = $this->csvImport($user);
+        $wanted = $this->image($this->search($user, ['csv_import_id' => $mine->id]));
+        $this->image($this->search($user, ['csv_import_id' => $theirs->id]));
+
+        $this->getJson("/api/v1/images?csv_import_id={$mine->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $wanted->id);
+    }
+
+    public function test_the_count_agrees_with_the_list_for_the_same_filters(): void
+    {
+        // The grid is cursor-paginated and carries no total, so this endpoint is
+        // the only source for "N images match". It has to agree with the list
+        // or the export button promises a number the export will not deliver.
+        $user = $this->actingAsApiUser();
+        $import = $this->csvImport($user);
+        $search = $this->search($user, ['csv_import_id' => $import->id]);
+        $this->image($search, ['make_confirmed' => true]);
+        $this->image($search, ['make_confirmed' => true]);
+        $this->image($search, ['make_confirmed' => false]);
+
+        $query = "csv_import_id={$import->id}&make_confirmed=1";
+
+        $listed = count($this->getJson("/api/v1/images?{$query}&per_page=100")->json('data'));
+
+        $this->getJson("/api/v1/images/count?{$query}")
+            ->assertOk()
+            ->assertJsonPath('count', 2);
+        $this->assertSame(2, $listed);
+    }
+
+    public function test_count_is_not_captured_as_an_image_id(): void
+    {
+        // GET images/{image} exists. Without a numeric constraint on {image},
+        // GET images/count binds "count" as an image id and 404s.
+        $this->actingAsApiUser();
+
+        $this->getJson('/api/v1/images/count')->assertOk()->assertJsonPath('count', 0);
+    }
+
+    public function test_counting_requires_search_read(): void
+    {
+        $this->actingAsApiUser([TokenAbilities::REVIEW_WRITE]);
+
+        $this->getJson('/api/v1/images/count')->assertForbidden();
+    }
 }

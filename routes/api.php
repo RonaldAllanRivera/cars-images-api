@@ -37,7 +37,12 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         Route::middleware(['ability:'.TokenAbilities::SEARCH_READ, 'throttle:120,1'])->group(function () {
             Route::get('images', [ImageController::class, 'index'])->name('images.index');
-            Route::get('images/{image}', [ImageController::class, 'show'])->name('images.show');
+            Route::get('images/count', [ImageController::class, 'count'])->name('images.count');
+            // Numeric only: a literal segment such as `count` can then never be
+            // captured as an image id, whatever order routes are added in.
+            Route::get('images/{image}', [ImageController::class, 'show'])
+                ->whereNumber('image')
+                ->name('images.show');
 
             Route::get('searches', [SearchController::class, 'index'])->name('searches.index');
             Route::get('searches/{search}', [SearchController::class, 'show'])->name('searches.show');
