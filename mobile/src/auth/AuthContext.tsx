@@ -54,6 +54,9 @@ export const REQUESTED_ABILITIES = {
     'imports:read',
     'search:run',
     'imports:write',
+    // Exports happen on the phone, after the CSV was uploaded in the panel. The
+    // web build never exports, so this stays off localStorage tokens.
+    'exports:read',
   ],
 } as const;
 

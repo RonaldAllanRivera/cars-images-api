@@ -122,12 +122,16 @@ describe('the abilities each build asks for', () => {
     }
   });
 
-  it('never asks for an ability no screen uses yet', () => {
-    // exports:read arrives with P4. Requesting it early would put it in a
-    // token before anything checks it.
-    for (const scope of Object.values(REQUESTED_ABILITIES)) {
-      expect(scope).not.toContain('exports:read');
-    }
+  it('asks for exports:read on native only', () => {
+    // P4 gives exports:read its screen. Exports happen on the phone, after the
+    // CSV was uploaded in the panel, so the web build never needs it and it
+    // stays off localStorage tokens.
+    //
+    // Asserted here because no Laravel test can catch its absence:
+    // actingAsApiUser() grants every ability, so the whole backend suite
+    // passes while the export panel is dead on the one build meant to have it.
+    expect(REQUESTED_ABILITIES.native).toContain('exports:read');
+    expect(REQUESTED_ABILITIES.web).not.toContain('exports:read');
   });
 
   it('keeps the four the server issues by default', () => {

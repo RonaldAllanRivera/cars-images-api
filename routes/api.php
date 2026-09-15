@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\MeController;
 use App\Http\Controllers\Api\V1\ErrorController;
+use App\Http\Controllers\Api\V1\ExportController;
 use App\Http\Controllers\Api\V1\HealthSummaryController;
 use App\Http\Controllers\Api\V1\ImageController;
 use App\Http\Controllers\Api\V1\ImportController;
@@ -37,7 +38,12 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         Route::middleware(['ability:'.TokenAbilities::SEARCH_READ, 'throttle:120,1'])->group(function () {
             Route::get('images', [ImageController::class, 'index'])->name('images.index');
-            Route::get('images/{image}', [ImageController::class, 'show'])->name('images.show');
+            Route::get('images/count', [ImageController::class, 'count'])->name('images.count');
+            // Numeric only: a literal segment such as `count` can then never be
+            // captured as an image id, whatever order routes are added in.
+            Route::get('images/{image}', [ImageController::class, 'show'])
+                ->whereNumber('image')
+                ->name('images.show');
 
             Route::get('searches', [SearchController::class, 'index'])->name('searches.index');
             Route::get('searches/{search}', [SearchController::class, 'show'])->name('searches.show');
@@ -70,6 +76,13 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('imports', [ImportController::class, 'store'])
             ->middleware(['ability:'.TokenAbilities::IMPORTS_WRITE, 'throttle:10,1'])
             ->name('imports.store');
+
+        // Mints a link rather than streaming a file: the app hands the link to
+        // the system browser, which owns the long download. A ZIP built from it
+        // costs up to a hundred Wikimedia fetches, hence the tight limit.
+        Route::post('exports', [ExportController::class, 'store'])
+            ->middleware(['ability:'.TokenAbilities::EXPORTS_READ, 'throttle:10,1'])
+            ->name('exports.store');
 
         Route::patch('images/{image}/review', ReviewImageController::class)
             ->middleware(['ability:'.TokenAbilities::REVIEW_WRITE, 'throttle:60,1'])

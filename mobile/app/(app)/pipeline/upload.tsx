@@ -5,6 +5,7 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { ApiValidationError } from '@/api/client';
 import { useUploadImport } from '@/api/hooks/useUploadImport';
+import { useCan } from '@/auth/useCan';
 import type { PickedCsv } from '@/api/hooks/useUploadImport';
 import { Button } from '@/ui/Button';
 import { ErrorBanner } from '@/ui/ErrorBanner';
@@ -32,6 +33,26 @@ export default function UploadCsv() {
   const upload = useUploadImport();
   const [file, setFile] = useState<PickedCsv | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const canUpload = useCan('imports:write');
+
+  // After every hook, so this return cannot reorder them. The route stays
+  // reachable by URL even with its entry point hidden, so the screen itself has
+  // to say why there is no picker - hiding only the link would leave a URL that
+  // opens straight into a guaranteed 403.
+  if (!canUpload) {
+    return (
+      <Screen>
+        <PageTitle title="Upload CSV - Cars Images" />
+        <View className="gap-2">
+          <Text className="text-section text-text">Uploads happen in the admin panel</Text>
+          <Text className="text-body text-text-secondary">
+            This build cannot upload CSVs. Upload from the admin panel on a computer; the
+            import appears in the Pipeline tab once it exists.
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
 
   const pick = async () => {
     setError(null);
