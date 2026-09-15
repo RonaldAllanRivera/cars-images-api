@@ -128,4 +128,60 @@ class ExportDownloadTest extends ApiTestCase
 
         $this->get($this->mint('zip'))->assertStatus(502);
     }
+
+    /**
+     * The ImageId column of an exported CSV, as ints.
+     *
+     * By column, not by substring: the CSV carries no title, and a bare id such
+     * as "2" would also match inside a URL or a year.
+     *
+     * @return list<int>
+     */
+    private function exportedImageIds(string $csv): array
+    {
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
+        $header = array_shift($rows);
+        $column = array_search('ImageId', $header, true);
+
+        return array_map(fn (array $row): int => (int) $row[$column], $rows);
+    }
+
+    public function test_a_false_verdict_filter_survives_the_signed_url(): void
+    {
+        /*
+         * The app sends make_confirmed as a JSON boolean. It is validated,
+         * serialized into the signed query string, and parsed back here. If any
+         * step dropped a `false`, the filter would vanish and "export the images
+         * that did not match" would silently become "export everything" - no
+         * error, just a bigger file.
+         */
+        $user = $this->actingAsApiUser();
+        $search = $this->search($user);
+        $this->image($search, ['make_confirmed' => true]);
+        $notMatched = $this->image($search, ['make_confirmed' => false]);
+        $this->image($search, ['make_confirmed' => null]);
+
+        $url = $this->postJson('/api/v1/exports', ['format' => 'csv', 'make_confirmed' => false])
+            ->assertCreated()
+            ->assertJsonPath('count', 1)
+            ->json('url');
+
+        $csv = $this->get($url)->assertOk()->streamedContent();
+
+        // Exactly the not-matched image: neither the matched one, nor the
+        // nullable "unknown", which a false filter must not sweep in.
+        $this->assertSame([$notMatched->id], $this->exportedImageIds($csv));
+    }
+
+    public function test_a_true_verdict_filter_survives_the_signed_url(): void
+    {
+        $user = $this->actingAsApiUser();
+        $search = $this->search($user);
+        $matched = $this->image($search, ['make_confirmed' => true]);
+        $this->image($search, ['make_confirmed' => false]);
+
+        $url = $this->postJson('/api/v1/exports', ['format' => 'csv', 'make_confirmed' => true])->json('url');
+
+        $this->assertSame([$matched->id], $this->exportedImageIds($this->get($url)->assertOk()->streamedContent()));
+    }
 }
