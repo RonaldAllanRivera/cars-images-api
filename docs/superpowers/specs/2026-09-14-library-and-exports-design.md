@@ -142,6 +142,28 @@ screen explains that uploads happen in the admin panel if reached directly.
 filter the "review one import, export its approved images" flow needs. Absent,
 behaviour is unchanged.
 
+### `GET /api/v1/images/count` — new
+
+Returns `{ "count": 63 }` for the same filters as `GET /images`, through the
+same `ListImagesRequest::apply()`. Ability `search:read`.
+
+**Added during planning, correcting this spec.** The first draft said the export
+section would take its count "from the grid's own query". It cannot: `GET
+/images` is cursor-paginated, and Laravel's cursor paginator computes no total —
+`meta` carries only `path`, `per_page`, `next_cursor` and `prev_cursor`. That
+is deliberate, not an oversight: a total would cost a `COUNT` on every page, and
+the original mobile spec chose cursors precisely because they neither skip nor
+repeat rows when a harvest inserts mid-scroll. Switching to offset pagination to
+get a total would reintroduce both.
+
+`search:read`, not `exports:read`, because "how many images match this filter"
+is not an export question. The Library can show the count in its header on
+every build; the export section reads the same number on native.
+
+**The count is advisory.** It drives display — the button label and the
+disabled-over-cap state — never the decision. `POST /exports` and the download
+route each recount, because the set can change between any two of the three.
+
 ### `POST /api/v1/exports`
 
 `auth:sanctum`, ability `exports:read`, `CarImagePolicy::export`, throttled.
@@ -229,10 +251,11 @@ Rendered only when `useCan('exports:read')`. A section above the grid:
 ZIP is limited to 100 images per download.
 ```
 
-**The count comes from the grid's own query**, so the button states what it
-will export before it is pressed. When a ZIP is over the cap the button is
-disabled with the reason beside it — not left pressable so the server can say
-no.
+**The count comes from `GET /images/count`**, fetched for the active filters,
+so the button states what it will export before it is pressed. (Not from the
+grid's query — that is cursor-paginated and carries no total; see the count
+endpoint above.) When a ZIP is over the cap the button is disabled with the
+reason beside it — not left pressable so the server can say no.
 
 Pressing either calls `POST /exports`, then `Linking.openURL(url)`. For the ZIP,
 a line first says the download may take a minute or two and leaves the app for
@@ -243,6 +266,8 @@ the browser — the same honesty P3b applied to leaving the app mid-run.
 **Laravel**
 
 - `GET /images?csv_import_id=` returns only that import's images.
+- `GET /images/count` agrees with `GET /images` for the same filters, including
+  `csv_import_id`, and 403s without `search:read`.
 - `POST /exports`: 403 without `exports:read`; 422 for an empty set; 422 for a
   ZIP over the cap and none for a CSV of the same size; the response URL carries
   a valid signature; a ZIP mint writes its nonce.
