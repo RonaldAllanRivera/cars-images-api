@@ -3,6 +3,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { useErrors } from '@/api/hooks/useErrors';
 import { useHealth } from '@/api/hooks/useHealth';
 import { useAuth } from '@/auth/AuthContext';
+import { contextLabel } from '@/format/errorContext';
 import { Button } from '@/ui/Button';
 import { ErrorBanner } from '@/ui/ErrorBanner';
 import { PageTitle } from '@/ui/PageTitle';
@@ -10,15 +11,6 @@ import { Screen } from '@/ui/Screen';
 import { SectionHeading } from '@/ui/SectionHeading';
 import { Skeleton, SkeletonGrid } from '@/ui/Skeleton';
 import { StatTile } from '@/ui/StatTile';
-
-/** Mirrors ErrorEvent::contexts() - keys to the labels Filament shows. */
-const CONTEXT_LABELS: Record<string, string> = {
-  csv_upload: 'CSV upload',
-  csv_row: 'CSV row',
-  search_run: 'Search run',
-  image_download: 'Image download',
-  wikimedia_block: 'Wikimedia block',
-};
 
 export default function Health() {
   const health = useHealth();
@@ -57,7 +49,7 @@ export default function Health() {
             <SectionHeading title="Errors by context, 7 days" />
             <View className="mb-6 flex-row flex-wrap gap-2">
               {Object.entries(health.data.errors_by_context_last_7d).map(([context, count]) => (
-                <StatTile key={context} label={CONTEXT_LABELS[context] ?? context} value={count} />
+                <StatTile key={context} label={contextLabel(context)} value={count} />
               ))}
             </View>
           </>
@@ -83,7 +75,7 @@ export default function Health() {
             <View key={event.id} className="mb-2 rounded-surface bg-surface-raised p-3">
               <View className="flex-row justify-between">
                 <Text className="text-micro text-accent-text">
-                  {CONTEXT_LABELS[event.context] ?? event.context}
+                  {contextLabel(event.context)}
                 </Text>
                 <Text className="text-micro text-text-muted">{event.occurred_at ?? ''}</Text>
               </View>

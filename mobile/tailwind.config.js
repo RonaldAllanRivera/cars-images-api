@@ -21,6 +21,7 @@ module.exports = {
         success: { DEFAULT: color.success, text: color.successText },
         danger: { DEFAULT: color.danger, text: color.dangerText },
         info: { DEFAULT: color.info, text: color.infoText },
+        chart: { series: color.chartSeries },
       },
       spacing: space,
       borderRadius: {
