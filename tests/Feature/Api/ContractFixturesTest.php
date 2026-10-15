@@ -43,8 +43,8 @@ class ContractFixturesTest extends ApiTestCase
 
         // Every numeric `throttle:N,1` here shares ONE cache key once a user
         // is authenticated - Laravel's default ThrottleRequests signature is
-        // sha1($user->id) alone, not the route, so all eleven authenticated
-        // calls below count against whichever limit is smallest (10, on the
+        // sha1($user->id) alone, not the route, so every authenticated
+        // call below counts against whichever limit is smallest (10, on the
         // search:write routes) regardless of which endpoint they hit. That is
         // abuse protection, not part of the API contract this test pins, so
         // it is switched off for this capture rather than making the fixture
@@ -159,6 +159,7 @@ class ContractFixturesTest extends ApiTestCase
             'import' => $this->getJson("/api/v1/imports/{$import->id}")->assertOk()->json(),
             'errors' => $this->getJson('/api/v1/errors')->assertOk()->json(),
             'health' => $this->getJson('/api/v1/health/summary')->assertOk()->json(),
+            'health-series' => $this->getJson('/api/v1/health/series')->assertOk()->json(),
             'validation-error' => $this->postJson('/api/v1/searches', [
                 'make' => 'Toyota',
                 'from_year' => 1990,

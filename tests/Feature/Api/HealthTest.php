@@ -80,4 +80,44 @@ class HealthTest extends ApiTestCase
         $this->getJson('/api/v1/errors?context=meteor_strike')->assertUnprocessable()
             ->assertJsonValidationErrors(['context']);
     }
+
+    public function test_the_series_requires_the_errors_read_ability(): void
+    {
+        $this->getJson('/api/v1/health/series')->assertUnauthorized();
+
+        $this->actingAsApiUser([TokenAbilities::SEARCH_READ]);
+        $this->getJson('/api/v1/health/series')->assertForbidden();
+    }
+
+    public function test_the_series_carries_both_windows_as_data_only(): void
+    {
+        $user = $this->actingAsApiUser([TokenAbilities::ERRORS_READ]);
+        $this->search($user, ['status' => 'completed']);
+        $this->search($user, ['status' => 'failed']);
+        $this->error(ErrorEvent::CONTEXT_WIKIMEDIA_BLOCK, now());
+
+        $response = $this->getJson('/api/v1/health/series')
+            ->assertOk()
+            ->assertJsonCount(30, 'data.throughput.days')
+            ->assertJsonPath('data.throughput.completed.29', 1)
+            ->assertJsonPath('data.throughput.failed.29', 1)
+            ->assertJsonCount(14, 'data.errors_by_context.days')
+            ->assertJsonPath('data.errors_by_context.series.wikimedia_block.13', 1)
+            ->assertJsonMissingPath('data.errors_by_context.series.search_run');
+
+        // Colour is presentation; the app's comes from its tokens.
+        $this->assertStringNotContainsString('#', $response->getContent());
+    }
+
+    public function test_a_quiet_fortnight_still_sends_series_as_an_object(): void
+    {
+        // PHP encodes an empty array as `[]`. The client reads `series` as a
+        // map from context to counts, and a list there fails its contract -
+        // which would take both charts down on exactly the good days.
+        $this->actingAsApiUser([TokenAbilities::ERRORS_READ]);
+
+        $content = $this->getJson('/api/v1/health/series')->assertOk()->getContent();
+
+        $this->assertStringContainsString('"series":{}', $content);
+    }
 }
