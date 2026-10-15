@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Auth\TokenAbilities;
 use App\Models\CarImage;
+use App\Models\CarMake;
 use App\Models\ErrorEvent;
 use App\Models\User;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -139,6 +140,14 @@ class ContractFixturesTest extends ApiTestCase
             'occurred_at' => now(),
         ]);
 
+        // Two makes, out of order, so makes.json pins the sort as well as the
+        // shape. Nothing else reads car_makes, so no other fixture moves.
+        CarMake::create(['name' => 'Honda'])->models()->createMany([
+            ['name' => 'CR-V'],
+            ['name' => 'Civic'],
+        ]);
+        CarMake::create(['name' => 'BMW'])->models()->create(['name' => 'X5']);
+
         // The fixture user, not a second factory user: me.json must describe
         // the same person reviewed_by points at, or the fixtures contradict
         // each other.
@@ -160,6 +169,7 @@ class ContractFixturesTest extends ApiTestCase
             'errors' => $this->getJson('/api/v1/errors')->assertOk()->json(),
             'health' => $this->getJson('/api/v1/health/summary')->assertOk()->json(),
             'health-series' => $this->getJson('/api/v1/health/series')->assertOk()->json(),
+            'makes' => $this->getJson('/api/v1/makes')->assertOk()->json(),
             'validation-error' => $this->postJson('/api/v1/searches', [
                 'make' => 'Toyota',
                 'from_year' => 1990,

@@ -397,6 +397,17 @@ php artisan db:seed --class=CarMakeSeeder --force
 php artisan db:seed --class=FilamentAdminUserSeeder --force
 ```
 
+**Check that `car_makes` has rows.** The mobile search form suggests makes and
+models from this table and from nowhere else. If production never ran
+`CarMakeSeeder`, the panel has been showing its hard-coded fallback list all
+along and the app will suggest nothing. The seeder is safe to rerun
+(`firstOrCreate`):
+
+```bash
+php artisan tinker --execute="echo App\Models\CarMake::count();"
+php artisan db:seed --class=CarMakeSeeder --force   # only if that printed 0
+```
+
 ### 4.9. Optimize the application for production
 
 ```bash
