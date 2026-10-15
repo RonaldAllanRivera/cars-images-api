@@ -2,9 +2,12 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { useErrors } from '@/api/hooks/useErrors';
 import { useHealth } from '@/api/hooks/useHealth';
+import { useHealthSeries } from '@/api/hooks/useHealthSeries';
 import { useAuth } from '@/auth/AuthContext';
 import { contextLabel } from '@/format/errorContext';
 import { Button } from '@/ui/Button';
+import { FailuresByKindChart } from '@/ui/charts/FailuresByKindChart';
+import { ThroughputChart } from '@/ui/charts/ThroughputChart';
 import { ErrorBanner } from '@/ui/ErrorBanner';
 import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
@@ -14,6 +17,7 @@ import { StatTile } from '@/ui/StatTile';
 
 export default function Health() {
   const health = useHealth();
+  const series = useHealthSeries();
   const errors = useErrors();
   const { signOut } = useAuth();
 
@@ -52,6 +56,38 @@ export default function Health() {
                 <StatTile key={context} label={contextLabel(context)} value={count} />
               ))}
             </View>
+          </>
+        ) : null}
+
+        {/* Its own request, so the counters above render whether or not the
+            charts' counts arrive - and a failure here says so rather than
+            leaving two headings over nothing. */}
+        {series.isError ? (
+          <ErrorBanner
+            message={series.error instanceof Error ? series.error.message : 'Charts unavailable.'}
+          />
+        ) : null}
+
+        {series.isLoading ? <Skeleton height={200} className="mb-6" /> : null}
+
+        {series.data ? (
+          <>
+            <SectionHeading
+              title={`Searches run, last ${series.data.throughput.days.length} days`}
+            />
+            <ThroughputChart
+              days={series.data.throughput.days}
+              completed={series.data.throughput.completed}
+              failed={series.data.throughput.failed}
+            />
+
+            <SectionHeading
+              title={`Failures by kind, last ${series.data.errors_by_context.days.length} days`}
+            />
+            <FailuresByKindChart
+              days={series.data.errors_by_context.days}
+              series={series.data.errors_by_context.series}
+            />
           </>
         ) : null}
 
