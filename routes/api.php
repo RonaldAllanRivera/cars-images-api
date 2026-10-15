@@ -6,9 +6,11 @@ use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\MeController;
 use App\Http\Controllers\Api\V1\ErrorController;
 use App\Http\Controllers\Api\V1\ExportController;
+use App\Http\Controllers\Api\V1\HealthSeriesController;
 use App\Http\Controllers\Api\V1\HealthSummaryController;
 use App\Http\Controllers\Api\V1\ImageController;
 use App\Http\Controllers\Api\V1\ImportController;
+use App\Http\Controllers\Api\V1\MakeController;
 use App\Http\Controllers\Api\V1\ReviewImageController;
 use App\Http\Controllers\Api\V1\RunChunkController;
 use App\Http\Controllers\Api\V1\SearchController;
@@ -48,6 +50,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('searches', [SearchController::class, 'index'])->name('searches.index');
             Route::get('searches/{search}', [SearchController::class, 'show'])->name('searches.show');
             Route::get('searches/{search}/images', [SearchController::class, 'images'])->name('searches.images');
+
+            // The search form's suggestions. Small and rarely changing; the
+            // app holds it for an hour.
+            Route::get('makes', MakeController::class)->name('makes.index');
         });
 
         Route::middleware(['ability:'.TokenAbilities::IMPORTS_READ, 'throttle:120,1'])->group(function () {
@@ -90,6 +96,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         Route::middleware(['ability:'.TokenAbilities::ERRORS_READ, 'throttle:120,1'])->group(function () {
             Route::get('health/summary', HealthSummaryController::class)->name('health.summary');
+            // Both charts' daily counts in one request: the screen always shows both.
+            Route::get('health/series', HealthSeriesController::class)->name('health.series');
             Route::get('errors', [ErrorController::class, 'index'])->name('errors.index');
         });
     });

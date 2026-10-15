@@ -1,10 +1,12 @@
 import errorsFixture from '../__fixtures__/errors.json';
+import healthSeriesFixture from '../__fixtures__/health-series.json';
 import healthFixture from '../__fixtures__/health.json';
 import imageFixture from '../__fixtures__/image.json';
 import imagesFixture from '../__fixtures__/images.json';
 import importFixture from '../__fixtures__/import.json';
 import importsFixture from '../__fixtures__/imports.json';
 import loginFixture from '../__fixtures__/login.json';
+import makesFixture from '../__fixtures__/makes.json';
 import meFixture from '../__fixtures__/me.json';
 import reviewFixture from '../__fixtures__/review.json';
 import searchFixture from '../__fixtures__/search.json';
@@ -14,11 +16,13 @@ import validationErrorFixture from '../__fixtures__/validation-error.json';
 import {
   cursorPage,
   ErrorEventSchema,
+  HealthSeriesSchema,
   HealthSummarySchema,
   ImageSchema,
   ImportSchema,
   RunChunkResponseSchema,
   LoginResponseSchema,
+  MakesSchema,
   SearchSchema,
   single,
   TokenAbilitySchema,
@@ -152,5 +156,45 @@ describe('the API contract', () => {
 
   it('rejects a response with a field the schema does not know about being wrong', () => {
     expect(() => ImageSchema.parse({ ...imageFixture.data, review_status: 'maybe' })).toThrow();
+  });
+
+  it('parses the health series', () => {
+    const parsed = single(HealthSeriesSchema).parse(healthSeriesFixture);
+
+    // Every day listed, quiet ones included: each array lines up with `days`.
+    expect(parsed.data.throughput.completed).toHaveLength(parsed.data.throughput.days.length);
+    expect(Object.keys(parsed.data.errors_by_context.series)).toEqual(['search_run']);
+  });
+
+  it('accepts a fortnight with no failures', () => {
+    expect(() =>
+      HealthSeriesSchema.shape.errors_by_context.parse({ days: ['2026-09-15'], series: {} }),
+    ).not.toThrow();
+  });
+
+  it('rejects a series sent as a list', () => {
+    // What PHP sends for an empty array unless the controller casts it. The
+    // server test pins the cast; this pins why it matters.
+    expect(() =>
+      HealthSeriesSchema.shape.errors_by_context.parse({ days: [], series: [] }),
+    ).toThrow();
+  });
+
+  it('accepts a failure kind the app does not know yet', () => {
+    // A context added on the server should arrive as one more chart, not as a
+    // contract failure that blanks both.
+    expect(() =>
+      HealthSeriesSchema.shape.errors_by_context.parse({
+        days: ['2026-09-15'],
+        series: { meteor_strike: [1] },
+      }),
+    ).not.toThrow();
+  });
+
+  it('parses the make catalogue', () => {
+    const parsed = single(MakesSchema).parse(makesFixture);
+
+    expect(parsed.data.map((make) => make.name)).toEqual(['BMW', 'Honda']);
+    expect(parsed.data[1]?.models).toEqual(['Civic', 'CR-V']);
   });
 });

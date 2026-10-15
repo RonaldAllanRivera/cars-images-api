@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Auth\TokenAbilities;
 use App\Models\CarImage;
+use App\Models\CarMake;
 use App\Models\ErrorEvent;
 use App\Models\User;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -43,8 +44,8 @@ class ContractFixturesTest extends ApiTestCase
 
         // Every numeric `throttle:N,1` here shares ONE cache key once a user
         // is authenticated - Laravel's default ThrottleRequests signature is
-        // sha1($user->id) alone, not the route, so all eleven authenticated
-        // calls below count against whichever limit is smallest (10, on the
+        // sha1($user->id) alone, not the route, so every authenticated
+        // call below counts against whichever limit is smallest (10, on the
         // search:write routes) regardless of which endpoint they hit. That is
         // abuse protection, not part of the API contract this test pins, so
         // it is switched off for this capture rather than making the fixture
@@ -139,6 +140,14 @@ class ContractFixturesTest extends ApiTestCase
             'occurred_at' => now(),
         ]);
 
+        // Two makes, out of order, so makes.json pins the sort as well as the
+        // shape. Nothing else reads car_makes, so no other fixture moves.
+        CarMake::create(['name' => 'Honda'])->models()->createMany([
+            ['name' => 'CR-V'],
+            ['name' => 'Civic'],
+        ]);
+        CarMake::create(['name' => 'BMW'])->models()->create(['name' => 'X5']);
+
         // The fixture user, not a second factory user: me.json must describe
         // the same person reviewed_by points at, or the fixtures contradict
         // each other.
@@ -159,6 +168,8 @@ class ContractFixturesTest extends ApiTestCase
             'import' => $this->getJson("/api/v1/imports/{$import->id}")->assertOk()->json(),
             'errors' => $this->getJson('/api/v1/errors')->assertOk()->json(),
             'health' => $this->getJson('/api/v1/health/summary')->assertOk()->json(),
+            'health-series' => $this->getJson('/api/v1/health/series')->assertOk()->json(),
+            'makes' => $this->getJson('/api/v1/makes')->assertOk()->json(),
             'validation-error' => $this->postJson('/api/v1/searches', [
                 'make' => 'Toyota',
                 'from_year' => 1990,

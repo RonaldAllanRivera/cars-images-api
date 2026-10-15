@@ -2,8 +2,8 @@
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Widgets\Concerns\BucketsByDay;
 use App\Models\ErrorEvent;
+use App\Services\Health\PipelineSeries;
 use Filament\Widgets\ChartWidget;
 
 /**
@@ -13,40 +13,32 @@ use Filament\Widgets\ChartWidget;
  */
 class ErrorsByContextChart extends ChartWidget
 {
-    use BucketsByDay;
-
     protected static ?int $sort = -2;
 
-    protected ?string $heading = 'Failures by kind (14 days)';
-
-    private const WINDOW_DAYS = 14;
+    protected ?string $heading = 'Failures by kind ('.PipelineSeries::ERRORS_DAYS.' days)';
 
     /**
+     * Only contexts that failed in the window arrive from PipelineSeries, so
+     * only they earn a legend entry. Colour is added here: it is the panel's,
+     * not the data's.
+     *
      * @return array{labels: array<int, string>, datasets: array<int, array<string, mixed>>}
      */
     public function series(): array
     {
-        $labels = $this->dayLabels(self::WINDOW_DAYS);
-
-        $rows = ErrorEvent::query()
-            ->where('occurred_at', '>=', now()->subDays(self::WINDOW_DAYS - 1)->startOfDay())
-            ->selectRaw('context, DATE(occurred_at) as day, COUNT(*) as total')
-            ->groupBy('context', 'day')
-            ->get();
+        $errors = app(PipelineSeries::class)->errorsByContext();
 
         $datasets = [];
 
-        // Only contexts that actually failed in the window get a legend entry:
-        // five permanently-empty series would bury the one that matters.
-        foreach ($rows->groupBy('context') as $context => $contextRows) {
+        foreach ($errors['series'] as $context => $data) {
             $datasets[] = [
                 'label' => ErrorEvent::contexts()[$context] ?? $context,
-                'data' => $this->countsForDays($contextRows, $labels),
+                'data' => $data,
                 'backgroundColor' => ErrorEvent::contextChartColor($context),
             ];
         }
 
-        return ['labels' => $labels, 'datasets' => $datasets];
+        return ['labels' => $errors['days'], 'datasets' => $datasets];
     }
 
     protected function getData(): array

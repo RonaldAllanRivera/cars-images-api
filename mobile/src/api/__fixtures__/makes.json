@@ -1,0 +1,17 @@
+{
+    "data": [
+        {
+            "name": "BMW",
+            "models": [
+                "X5"
+            ]
+        },
+        {
+            "name": "Honda",
+            "models": [
+                "Civic",
+                "CR-V"
+            ]
+        }
+    ]
+}

@@ -2,8 +2,12 @@ import { ScrollView, Text, View } from 'react-native';
 
 import { useErrors } from '@/api/hooks/useErrors';
 import { useHealth } from '@/api/hooks/useHealth';
+import { useHealthSeries } from '@/api/hooks/useHealthSeries';
 import { useAuth } from '@/auth/AuthContext';
+import { contextLabel } from '@/format/errorContext';
 import { Button } from '@/ui/Button';
+import { FailuresByKindChart } from '@/ui/charts/FailuresByKindChart';
+import { ThroughputChart } from '@/ui/charts/ThroughputChart';
 import { ErrorBanner } from '@/ui/ErrorBanner';
 import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
@@ -11,17 +15,9 @@ import { SectionHeading } from '@/ui/SectionHeading';
 import { Skeleton, SkeletonGrid } from '@/ui/Skeleton';
 import { StatTile } from '@/ui/StatTile';
 
-/** Mirrors ErrorEvent::contexts() - keys to the labels Filament shows. */
-const CONTEXT_LABELS: Record<string, string> = {
-  csv_upload: 'CSV upload',
-  csv_row: 'CSV row',
-  search_run: 'Search run',
-  image_download: 'Image download',
-  wikimedia_block: 'Wikimedia block',
-};
-
 export default function Health() {
   const health = useHealth();
+  const series = useHealthSeries();
   const errors = useErrors();
   const { signOut } = useAuth();
 
@@ -57,9 +53,41 @@ export default function Health() {
             <SectionHeading title="Errors by context, 7 days" />
             <View className="mb-6 flex-row flex-wrap gap-2">
               {Object.entries(health.data.errors_by_context_last_7d).map(([context, count]) => (
-                <StatTile key={context} label={CONTEXT_LABELS[context] ?? context} value={count} />
+                <StatTile key={context} label={contextLabel(context)} value={count} />
               ))}
             </View>
+          </>
+        ) : null}
+
+        {/* Its own request, so the counters above render whether or not the
+            charts' counts arrive - and a failure here says so rather than
+            leaving two headings over nothing. */}
+        {series.isError ? (
+          <ErrorBanner
+            message={series.error instanceof Error ? series.error.message : 'Charts unavailable.'}
+          />
+        ) : null}
+
+        {series.isLoading ? <Skeleton height={200} className="mb-6" /> : null}
+
+        {series.data ? (
+          <>
+            <SectionHeading
+              title={`Searches run, last ${series.data.throughput.days.length} days`}
+            />
+            <ThroughputChart
+              days={series.data.throughput.days}
+              completed={series.data.throughput.completed}
+              failed={series.data.throughput.failed}
+            />
+
+            <SectionHeading
+              title={`Failures by kind, last ${series.data.errors_by_context.days.length} days`}
+            />
+            <FailuresByKindChart
+              days={series.data.errors_by_context.days}
+              series={series.data.errors_by_context.series}
+            />
           </>
         ) : null}
 
@@ -83,7 +111,7 @@ export default function Health() {
             <View key={event.id} className="mb-2 rounded-surface bg-surface-raised p-3">
               <View className="flex-row justify-between">
                 <Text className="text-micro text-accent-text">
-                  {CONTEXT_LABELS[event.context] ?? event.context}
+                  {contextLabel(event.context)}
                 </Text>
                 <Text className="text-micro text-text-muted">{event.occurred_at ?? ''}</Text>
               </View>

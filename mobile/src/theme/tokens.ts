@@ -47,6 +47,14 @@ export const color = {
   dangerText: '#fca5a5', // red-300
   info: '#0ea5e9', // sky-500
   infoText: '#7dd3fc', // sky-300
+  /*
+   * The one categorical chart colour: blue, slot one of the validated palette,
+   * at 3:1 or better against surfaceRaised. Failures by kind draws each kind
+   * as its own small multiple, so identity never rides on colour and one hue
+   * is all it needs. Not red - red already means "failed" in the throughput
+   * chart beside it.
+   */
+  chartSeries: '#3987e5',
 } as const;
 
 /** 4px rhythm. Screen padding 4, card padding 3, list gap 2, section gap 6. */

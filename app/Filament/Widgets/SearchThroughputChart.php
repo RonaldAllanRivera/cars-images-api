@@ -2,8 +2,7 @@
 
 namespace App\Filament\Widgets;
 
-use App\Filament\Widgets\Concerns\BucketsByDay;
-use App\Models\CarSearch;
+use App\Services\Health\PipelineSeries;
 use Filament\Widgets\ChartWidget;
 
 /**
@@ -13,43 +12,34 @@ use Filament\Widgets\ChartWidget;
  */
 class SearchThroughputChart extends ChartWidget
 {
-    use BucketsByDay;
-
     protected static ?int $sort = -1;
 
-    protected ?string $heading = 'Searches run (30 days)';
-
-    private const WINDOW_DAYS = 30;
+    protected ?string $heading = 'Searches run ('.PipelineSeries::THROUGHPUT_DAYS.' days)';
 
     /**
-     * Both series are always present, even when empty, so the legend does not
-     * change shape between a quiet week and a busy one.
+     * The counting lives in PipelineSeries, shared with the mobile API. This
+     * widget adds only what is Chart.js's: labels, datasets and colours. The
+     * keys stay Chart.js's own rather than the service's, because the widget
+     * tests assert on `labels` and `datasets[].label/data`.
      *
      * @return array{labels: array<int, string>, datasets: array<int, array<string, mixed>>}
      */
     public function series(): array
     {
-        $labels = $this->dayLabels(self::WINDOW_DAYS);
-
-        $rows = CarSearch::query()
-            ->whereIn('status', ['completed', 'failed'])
-            ->where('created_at', '>=', now()->subDays(self::WINDOW_DAYS - 1)->startOfDay())
-            ->selectRaw('status, DATE(created_at) as day, COUNT(*) as total')
-            ->groupBy('status', 'day')
-            ->get();
+        $throughput = app(PipelineSeries::class)->throughput();
 
         $datasets = [];
 
         foreach (['completed' => ['Completed', '#16a34a'], 'failed' => ['Failed', '#dc2626']] as $status => [$label, $colour]) {
             $datasets[] = [
                 'label' => $label,
-                'data' => $this->countsForDays($rows->where('status', $status), $labels),
+                'data' => $throughput[$status],
                 'borderColor' => $colour,
                 'backgroundColor' => $colour,
             ];
         }
 
-        return ['labels' => $labels, 'datasets' => $datasets];
+        return ['labels' => $throughput['days'], 'datasets' => $datasets];
     }
 
     protected function getData(): array

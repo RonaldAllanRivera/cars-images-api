@@ -8,14 +8,19 @@ import {
   MAX_YEAR_SPAN,
   useCreateSearch,
 } from '@/api/hooks/useCreateSearch';
+import { useMakes } from '@/api/hooks/useMakes';
 import { Button } from '@/ui/Button';
 import { ErrorBanner } from '@/ui/ErrorBanner';
 import { Field } from '@/ui/Field';
 import { PageTitle } from '@/ui/PageTitle';
 import { Screen } from '@/ui/Screen';
+import { suggest, Suggestions } from '@/ui/Suggestions';
 
 export default function SearchForm() {
   const createSearch = useCreateSearch();
+  // Suggestions only. A failed or empty catalogue leaves both fields as plain
+  // text that still submits, so its error is deliberately not shown.
+  const makes = useMakes();
   const [make, setMake] = useState('');
   const [model, setModel] = useState('');
   const [fromYear, setFromYear] = useState('');
@@ -25,6 +30,12 @@ export default function SearchForm() {
   // The run behind a blocked/failed notice, so the banner can link to it
   // without navigating away from the message the user has to read.
   const [noticeRunId, setNoticeRunId] = useState<number | null>(null);
+
+  const catalogue = makes.data ?? [];
+  // Matched ignoring case, so "honda" still offers Honda's models.
+  const chosenMake = catalogue.find(
+    (entry) => entry.name.toLowerCase() === make.trim().toLowerCase(),
+  );
 
   const submit = async () => {
     setError(null);
@@ -99,7 +110,9 @@ export default function SearchForm() {
   return (
     <Screen>
       <PageTitle title="New search - Cars Images" />
-      <ScrollView contentContainerClassName="gap-3">
+      {/* keyboardShouldPersistTaps: with the default, the first tap on a
+          suggestion only dismisses the keyboard and the user taps twice. */}
+      <ScrollView contentContainerClassName="gap-3" keyboardShouldPersistTaps="handled">
         <Text className="text-title text-text">New search</Text>
         <Text className="text-meta text-text-secondary">
           Runs immediately against Wikimedia Commons. Up to {MAX_YEAR_SPAN + 1} years,{' '}
@@ -123,13 +136,25 @@ export default function SearchForm() {
           </View>
         ) : null}
 
-        <Field label="Make" placeholder="e.g. Toyota" value={make} onChangeText={setMake} />
-        <Field
-          label="Model"
-          hint="Optional. Narrows the search to one model."
-          value={model}
-          onChangeText={setModel}
-        />
+        <View className="gap-1">
+          <Field label="Make" placeholder="e.g. Toyota" value={make} onChangeText={setMake} />
+          <Suggestions
+            items={suggest(
+              catalogue.map((entry) => entry.name),
+              make,
+            )}
+            onPick={setMake}
+          />
+        </View>
+        <View className="gap-1">
+          <Field
+            label="Model"
+            hint="Optional. Narrows the search to one model."
+            value={model}
+            onChangeText={setModel}
+          />
+          <Suggestions items={suggest(chosenMake?.models ?? [], model)} onPick={setModel} />
+        </View>
         <View className="flex-row gap-3">
           <View className="flex-1">
             <Field

@@ -127,6 +127,33 @@ export const HealthSummarySchema = z.object({
 });
 export type HealthSummary = z.infer<typeof HealthSummarySchema>;
 
+/**
+ * GET /health/series: the two charts' daily counts. Data only - colour comes
+ * from the tokens, never the API.
+ *
+ * Every day of each window is listed, quiet ones included, and every array
+ * lines up with its `days`.
+ */
+export const HealthSeriesSchema = z.object({
+  throughput: z.object({
+    days: z.array(z.string()),
+    completed: z.array(z.number().int()),
+    failed: z.array(z.number().int()),
+  }),
+  errors_by_context: z.object({
+    days: z.array(z.string()),
+    /*
+     * Only the contexts that failed in the window; absent means zero. Keyed by
+     * plain string rather than ErrorContextSchema: a context added on the
+     * server should arrive as one more small multiple, not as a contract
+     * failure that blanks both charts. (Zod 4's record over an enum is also
+     * exhaustive - it would demand all five keys.)
+     */
+    series: z.record(z.string(), z.array(z.number().int())),
+  }),
+});
+export type HealthSeries = z.infer<typeof HealthSeriesSchema>;
+
 /** POST /auth/login is the ONE endpoint with no `data` envelope. */
 /**
  * The six coverage counts. `searched` is derived server-side (total minus
@@ -197,6 +224,15 @@ export const ExportLinkSchema = z.object({
   format: z.enum(['csv', 'zip']),
 });
 export type ExportLink = z.infer<typeof ExportLinkSchema>;
+
+/** GET /makes: the curated catalogue the search form suggests from. */
+export const CarMakeSchema = z.object({
+  name: z.string(),
+  models: z.array(z.string()),
+});
+export type CarMake = z.infer<typeof CarMakeSchema>;
+
+export const MakesSchema = z.array(CarMakeSchema);
 
 export const LoginResponseSchema = z.object({
   token: z.string(),
