@@ -37,5 +37,9 @@ export const queryKeys = {
   imports: () => ['imports'] as const,
   import: (id: number) => ['imports', id] as const,
   health: () => ['health'] as const,
+  // Under 'health' on purpose: useCreateSearch invalidates ['health'] after a
+  // run, and that prefix refreshes the charts along with the counters.
+  healthSeries: () => ['health', 'series'] as const,
+  makes: () => ['makes'] as const,
   errors: (filters: ErrorFilters = {}) => ['errors', filters] as const,
 };
