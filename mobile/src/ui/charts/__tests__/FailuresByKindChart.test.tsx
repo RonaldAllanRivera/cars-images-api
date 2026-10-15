@@ -46,4 +46,24 @@ describe('<FailuresByKindChart />', () => {
 
     expect(screen.getByText('meteor_strike')).toBeTruthy();
   });
+
+  it('draws a series longer than its days against the days, not past them', () => {
+    // The server lines every array up with `days`, but the contract does not
+    // enforce it. A value past the last day has no date, so it must not draw a
+    // column labelled "1 January", count in the total, or stretch the scale.
+    render(<FailuresByKindChart days={days} series={{ search_run: [0, 2, 5] }} />);
+
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+    expect(screen.queryByLabelText(/1 January/)).toBeNull();
+    expect(screen.getByText('2 in 2 days')).toBeTruthy();
+    // The axis top comes from the drawn values only: 2, not 5.
+    expect(screen.getByText('2')).toBeTruthy();
+  });
+
+  it('draws a series shorter than its days as zero on the missing days', () => {
+    render(<FailuresByKindChart days={days} series={{ search_run: [2] }} />);
+
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+    expect(screen.getByLabelText('Search run, 15 September: 0')).toBeTruthy();
+  });
 });

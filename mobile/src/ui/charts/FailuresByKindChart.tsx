@@ -38,12 +38,17 @@ export function FailuresByKindChart({ days, series }: Props) {
     );
   }
 
-  const max = niceCeiling(Math.max(0, ...Object.values(series).flat()));
+  // Indexed by `days`, never by a series' own length, as ThroughputChart is:
+  // a value past the last day has no date to draw it on, and a missing one is
+  // zero. The contract does not enforce that the arrays line up.
+  const valuesFor = (context: string) => days.map((_, i) => series[context]?.[i] ?? 0);
+
+  const max = niceCeiling(Math.max(0, ...contexts.flatMap(valuesFor)));
 
   return (
     <View className="mb-6 gap-2">
       {contexts.map((context) => {
-        const values = series[context] ?? [];
+        const values = valuesFor(context);
         const label = contextLabel(context);
         const countOn = (i: number) => values[i] ?? 0;
         const active = selected?.context === context ? selected.index : null;
