@@ -1,0 +1,70 @@
+name: Weekly dependency audit
+
+# The Test job in ci-cd.yml already fails on a composer advisory, but only when
+# something is pushed - so an advisory published between pushes sits unseen
+# until an unrelated change trips over it and that change's deploy is skipped.
+# That is how the advisories cleared in 9d2e721 surfaced: published from late
+# August, found on 2026-10-15 by the merge of an unrelated feature. This runs the same check on a
+# calendar, so the first anyone hears of an advisory is a red run here rather
+# than a blocked deploy.
+#
+# Report-only by construction: there is no deploy job in this file, and the
+# token below cannot write to the repository.
+#
+# Composer only. mobile/ is deliberately not audited: its npm advisories sit
+# almost entirely in Expo's build tooling (the CLI dev server, Tailwind, jest),
+# none of it in the shipped web bundle, and most clear only with an Expo SDK
+# release. A job that is red every week for things nobody here can fix is a job
+# nobody opens.
+#
+# Two GitHub behaviours worth knowing:
+#  - A failed scheduled run is emailed to whoever created this workflow or last
+#    edited its cron line, not to the repository at large.
+#  - In a public repository GitHub disables schedules after 60 days without a
+#    commit. A quiet repository is exactly when this matters, so if the project
+#    goes dormant, re-enable it from the Actions tab.
+
+on:
+  schedule:
+    # Mondays 01:17 UTC (09:17 in UTC+8). Off the hour on purpose: scheduled
+    # runs are queued, and the top of the hour is when GitHub delays them most.
+    - cron: '17 1 * * 1'
+  pull_request:
+    # Also run when the check itself changes. A schedule only fires from main,
+    # so without this a broken edit would surface the following Monday.
+    paths:
+      - '.github/workflows/audit.yml'
+      - '.github/scripts/composer-audit.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  composer:
+    name: composer audit (composer.lock)
+    # Pinned for the same reason as ci-cd.yml.
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      # --locked audits composer.lock itself, so nothing is installed: no
+      # extensions, no vendor/. The lock file is exactly what the deploy
+      # installs on SiteGround, which makes it the thing worth auditing.
+      - name: Audit composer.lock for known vulnerabilities
+        id: audit
+        run: bash .github/scripts/composer-audit.sh --locked
+
+      # Only after the audit itself failed - a checkout or setup-php failure is
+      # not an advisory, and saying it is would send someone updating packages.
+      - name: Say what happens next
+        if: failure() && steps.audit.outcome == 'failure'
+        run: |
+          echo "::error::A published advisory now affects composer.lock. Until it is cleared, every push that runs ci-cd.yml fails its Test job, and on main the deploy is skipped. Update the named packages with 'composer update <package> --with-dependencies' - commit 9d2e721 is a worked example."
