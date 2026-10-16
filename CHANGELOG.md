@@ -7,7 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A weekly `composer audit` that runs whether or not anything is pushed**
+  (`.github/workflows/audit.yml`, Mondays 01:17 UTC). The Test job already
+  failed on an advisory, but only on a push — so the six cleared in `9d2e721`
+  sat unseen from late August until an unrelated merge on 2026-10-15 tripped
+  over them and lost its deploy. The weekly run reports instead; it has no
+  deploy job and a read-only token. It audits `composer.lock` with `--locked`,
+  so nothing is installed. The Packagist retry loop moved out of `ci-cd.yml`
+  into `.github/scripts/composer-audit.sh` so both workflows share one copy.
+  `mobile/` is deliberately not audited: of its 76 npm findings only 10 are
+  advisories in their own right, nearly all in Expo's build tooling rather
+  than the shipped bundle, and most clear only with an Expo SDK release — a
+  job red every week for that would teach everyone to ignore it.
+
 ### Changed
+
+- **CI runners pinned to `ubuntu-24.04`** in every job of every workflow,
+  instead of `ubuntu-latest`, which moves to Ubuntu 26 from 2026-10-19. The
+  move would otherwise change the OS under setup-php, the SiteGround deploy and
+  the Netlify publish with no commit recording it. Moving to 26 is now a
+  deliberate change made on a branch.
 
 - **CI actions moved to the majors that run Node 24** — `actions/checkout@v7`,
   `actions/cache@v6`, `actions/setup-node@v7`, across both workflows. The `v4`

@@ -26,7 +26,9 @@ defaults:
 jobs:
   check:
     name: Typecheck, lint, test, export
-    runs-on: ubuntu-latest
+    # Pinned for the same reason as ci-cd.yml: ubuntu-latest moves to Ubuntu 26
+    # from 2026-10-19, under a build and deploy that have only run on 24.04.
+    runs-on: ubuntu-24.04
 
     steps:
       # These majors run on Node 24. The v4 pins declared Node 20, which the
@@ -81,7 +83,7 @@ jobs:
 
   deploy:
     name: Deploy web build to Netlify
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: check
     # Only from main, never from a pull request (a fork's PR has no secrets and
     # the job would fail confusingly), and only once the repository variable
