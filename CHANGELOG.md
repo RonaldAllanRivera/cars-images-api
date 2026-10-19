@@ -42,6 +42,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schemas are untouched. Verified by running the suite under both `.env` files:
   267 pass either way, and neither run leaves fixture churn behind.
 
+### Security
+
+- **Four npm advisories cleared in the Expo app, the one critical among them**
+  — `shell-quote` 1.10.0 → 1.12.0 (command injection through `quote()`),
+  `brace-expansion` 1.1.18 → 1.1.21 and 5.0.9 → 5.0.12 (three CPU and
+  stack-exhaustion denials of service), `compression` 1.8.1 → 1.8.2 (memory
+  leak on a premature close) and `source-map-js` 1.2.1 → 1.2.2 (event-loop
+  denial of service). `@expo/metro-file-map` 57.0.2 → 57.0.4 also moved: it
+  dropped `micromatch`, which takes it off the `braces` chain. `npm audit` in
+  `mobile/` goes from 76 findings to 71, critical 1 → 0, high 56 → 52.
+  All four sit in build and dev tooling — React DevTools, the Expo CLI dev
+  server, PostCSS under Tailwind, and the globbing behind ESLint, Jest and the
+  config plugins. `mobile/package-lock.json` only; `package.json` is unchanged.
+
+  Done with `npm update` on those five names rather than `npm audit fix`,
+  which lands on the same versions and the same 71 but rebuilds the tree
+  around them, and that rebuild broke the app. It moved the whole SDK 57 patch
+  line (`expo` 57.0.20 → 57.0.30). It resolved `@expo/cli`'s optional
+  `expo-router@"*"` peer to SDK 58's router, which the static web export then
+  renders through. And it moved `expo-modules-core` out from under the root
+  into `expo/` — the root's `react-native-worklets` 0.12 falls outside its peer
+  range — where the Expo packages that import it without declaring it cannot
+  reach it. On that lock all 31 test suites and the web export failed.
+
+  The other 71 need jest 30, Tailwind 4, nativewind 5 or Expo SDK 58, and are
+  left for those upgrades. That includes eight that `npm audit` still labels
+  fixable: each one traces back to `braces`, `node-forge`, `uuid`, `sprintf-js`
+  or `postcss-selector-parser`, and those clear only with a major bump. Never
+  run `npm audit fix --force` here — its fixes include downgrading to
+  `expo@44` and `react-native@0.72`.
+
 ### Planned
 
 - Move bulk search and bulk download onto a real queue worker so long runs are not bound by the web request timeout (the `RunCarSearchJob`, `FetchWikimediaCarImagesForYearJob`, and `DownloadCarImagesJob` classes exist as scaffolding but are not dispatched yet).
