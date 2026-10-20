@@ -1,5 +1,7 @@
 # PLAN: Cars Images API – Wikimedia + Laravel Filament
 
+_Sections 1–11 are the original design from November 2025, with notes where the code has since diverged. Section 12 is the current status, last checked against the code on 2026-10-20._
+
 ## 1. Objectives
 
 - Build an internal system for your employer that fetches **high-resolution car images** from **Wikimedia**.
@@ -41,13 +43,25 @@
      - Submitting searches.
      - Viewing search history.
      - Reviewing images with filters and bulk actions (e.g. Download selected).
+   - The CSV bulk pipeline (Upload CSV → Search Queries → Results), the pipeline error log and the health widgets were added after this plan was written; see [README → Usage](README.md#usage).
 
-7. **Optional HTTP API**
-   - Expose internal endpoints (e.g. `/api/car-images/search`) for integration with other internal tools.
+7. **JSON API (`/api/v1`)** – shipped in 0.10.0 (2026-09-09)
+   - A versioned API that lets clients other than the panel run searches, browse runs and images, record review verdicts, upload and run CSV imports, request signed export links, and read pipeline health.
+   - Sanctum bearer tokens with scoped abilities, and a throttle named on every route. Searches run inside the request, so the API's caps are tighter than the panel's.
+   - Details: [README → JSON API](README.md#json-api).
+
+8. **Mobile client (`mobile/`)** – shipped in 0.10.0 (2026-09-09)
+   - An Expo (React Native, TypeScript) app with Search, Library, Pipeline, Review and Health tabs, built against `/api/v1`. Its Zod schemas are tested against JSON fixtures that the PHP suite generates, so the API and the app cannot drift apart silently.
+   - Published as a static web build to Netlify from GitHub Actions; an Android APK is planned.
+   - Details: [README → Mobile client](README.md#mobile-client).
+
+> **As built (2026-10-20):** items 1–3 describe the original design. Retrieval now reads Commons categories instead of building search queries (see the note at the top of section 3), and the jobs in item 3 are never dispatched: all work runs synchronously inside web requests, in bounded chunks (section 12, Phase 3).
 
 ---
 
 ## 3. Wikimedia Integration Design
+
+> **Superseded (2026-08-31).** Full-text search was replaced by Commons category retrieval. `searchCars()` and the query-string and cache-key scheme below no longer exist, and color, transmission and the transparent flag no longer affect what is fetched. Caching uses Laravel's `file` store rather than Redis, plus a `commons_category_lookups` table. For current behaviour see section 12, Phase 2; the design is in [`docs/superpowers/specs/2026-08-31-commons-category-retrieval-design.md`](docs/superpowers/specs/2026-08-31-commons-category-retrieval-design.md).
 
 ### 3.1 API Strategy
 
@@ -157,6 +171,8 @@ This structure lets you:
 
 ## 5. Search Flow (FROM YEAR / TO YEAR)
 
+> **As built:** steps 3–5 never shipped as written. The search runs synchronously in the request that submits the form, and `RunCarSearchJob` and `FetchWikimediaCarImagesForYearJob` are never dispatched. Step 5's retrieval and cache key were replaced by category reads (see the note at the top of section 3). Because the category is resolved from the model, a search with no model returns no images. See section 12, Phases 2–3.
+
 1. User opens **Filament page** "Car Image Search".
 2. User fills in:
    - Make (required)
@@ -230,7 +246,7 @@ This structure lets you:
    - Bulk actions:
      - Delete selected images.
      - Download selected (streams selected images as a ZIP archive to the admin's browser).
-     - Export selected. *(planned)*
+     - Export selected. *(Not on this resource: CSV export shipped on the Results page instead; see section 12, Phase 5.)*
    - Row actions:
      - Preview image in a modal (larger thumbnail with metadata and source link).
      - Download single image immediately via an internal download endpoint that streams the provider image to the browser.
@@ -247,7 +263,7 @@ This structure lets you:
 5. **Custom Filament Page: "Car Image Search"**
    - A form-driven page (outside the standard resource CRUD) optimised for triggering new searches.
    - Fields mirror the search parameters.
-   - On submit, create `CarSearch` and dispatch `RunCarSearchJob`.
+   - On submit, create `CarSearch` and dispatch `RunCarSearchJob`. *(As built: the `CarSearch` Create page is this form, and it runs the search synchronously. No job is dispatched.)*
    - Show a panel with recent searches and their status.
 
 ### 7.2 Authorization
@@ -304,6 +320,8 @@ This structure lets you:
 
 ## 11. Implementation Phases
 
+The original six phases, kept as written. Their status, and the work that shipped outside them, is in section 12.
+
 1. **Phase 1 – Foundation**
    - Ensure Laravel / Filament setup is complete.
    - Add DB migrations and Eloquent models for `CarSearch` and `CarImage`.
@@ -333,37 +351,85 @@ This structure lets you:
 
 ## 12. Current Implementation Status
 
+_Checked against the code on 2026-10-20, at `main` `699d513`. Versions come from `composer.lock` and `mobile/package-lock.json`; test counts come from running both suites._
+
+**Stack:** Laravel 13.36, Filament 5.10 (Livewire 4.4), Sanctum 4.3 and PHPUnit 12.5, on PHP 8.3+. The mobile app uses Expo SDK 57, React Native 0.86 and React 19.2. The upgrade from Laravel 12 / Filament 4 is recorded in [`docs/upgrades/2026-08-24-laravel-13-filament-5-upgrade.md`](docs/upgrades/2026-08-24-laravel-13-filament-5-upgrade.md).
+
 - **Phase 1 – Foundation**
-  - Completed. Laravel 12 and Filament 4 are installed and configured. `car_searches` and `car_images` tables and models exist, and a `cars` filesystem disk is configured.
+  - Complete. The `car_searches` and `car_images` tables and models exist, and the `cars` disk is configured (local driver, `storage/app/public/cars`).
+  - The schema has outgrown section 4. It adds the `csv_imports`, `wikimedia_block_events`, `error_events`, `commons_category_lookups` and `personal_access_tokens` tables, `csv_import_id` and `commons_category` on searches, and `make_confirmed`, `year_confirmed` and `review_status` on images.
 
 - **Phase 2 – Wikimedia Client & Services**
-  - Completed. `WikimediaClient` calls the MediaWiki API, normalizes image data, and caches by query. Search queries now also include **transmission** when provided, and a lightweight content filter attempts to drop obvious non-car images (e.g. flowers / plants and clearly non-car academic/journal pages such as psychology / neuroscience articles).
-  - `CarImageSearchService` coordinates multi-year searches and stores `CarImage` records.
-  - Additional: `findExistingCompletedSearch()` provides DB-backed reuse of identical searches to avoid repeated Wikimedia calls.
+  - Complete, but retrieval no longer works the way section 3 describes. Since 2026-08-31 a search reads a Commons category instead of running a full-text search ([spec](docs/superpowers/specs/2026-08-31-commons-category-retrieval-design.md)):
+    - `CommonsCategoryLocator` resolves make + model to one category through `CommonsCategoryResolver`, which normalizes the model string with `ModelSearchTermNormalizer` first. The answer is stored in `commons_category_lookups`, and a failed lookup is retried after 30 days.
+    - `WikimediaClient::filesInCategory()` pages through the category (at most 500 files, with the year passed as a relevance hint), drops anything whose MIME type is not `image/*`, and caches the listing per category and year.
+    - `CarImageSearchService` keeps only files whose title names the searched year (`ModelYearMatcher`), takes `images_per_year` of them, and upserts them keyed on `(car_search_id, year, provider, provider_image_id)`. `MakeRelevanceChecker::isConfirmed()` fills `make_confirmed`.
+  - Color, transmission and the transparent flag are still stored on the search but no longer reach Wikimedia. A search with no model resolves no category and returns no images.
+  - Removed along with full-text search (commit `4b0996b`): query building, the `isCarImage()` keyword filter, off-make rejection, and the retry-without-year fallback.
+  - Still in place: `findExistingCompletedSearch()` reuses an identical completed search. Requests send a contactable User-Agent and `maxlag`, retry with exponential backoff, and raise `WikimediaBlockedException` on 429, 403 or 503.
 
 - **Phase 3 – Jobs & Queues**
-  - `RunCarSearchJob`, `FetchWikimediaCarImagesForYearJob`, and `DownloadCarImagesJob` are implemented and ready for future background processing.
-  - In the current local setup, new searches are executed synchronously from the Filament Create page (no queue worker required), but the jobs can be wired up for async execution later.
+  - Not wired. `RunCarSearchJob`, `FetchWikimediaCarImagesForYearJob` and `DownloadCarImagesJob` exist in `app/Jobs/`, but nothing dispatches them and no test covers them. `RunCarSearchJob` would call `runSearch()` directly rather than fan out one job per year as section 5 planned.
+  - Production is shared hosting with `QUEUE_CONNECTION=sync` and no worker or cron, so all work runs inside web requests and is bounded by caps in `config/cars-images.php`:
+    - Ad-hoc searches run synchronously on create, on edit, and from **Refresh from Wikimedia**.
+    - A CSV bulk run is started by a click on **Search Queries** and then driven by Livewire polling. Each poll runs one chunk of at most 50 queries or about 10 seconds, pausing 1 second between queries. `POST /api/v1/searches/run-chunk` runs the same chunk for the mobile app.
+    - `POST /api/v1/searches` runs inline, capped at a 3-year span and 5 images per year.
+  - Moving this work onto a queue worker is on the roadmap.
 
 - **Phase 4 – Filament Admin UI**
-  - `CarSearchResource`, `CarImageResource`, and `CarMakeResource` created using Filament 4 APIs.
-  - Create page for `CarSearch` acts as the "Car Image Search" form, with dynamic make/model selects, year range, and optional color/transmission filters (via "All ..." options), a transparent flag, and images-per-year fields, plus reuse-or-create logic and status tracking.
-  - Existing `CarSearch` records that have `null` model, color, or transmission values hydrate the form with the corresponding **All ...** options, and both Car Searches and Car Images tables render those `null` values as `All` for consistent UX.
-  - `CarMakeResource` provides a dedicated page under the Cars navigation group where admins can add a car make and maintain a list of models for that make via a repeater, which feeds into the Car Image Search make/model dropdowns.
-  - Editing a `CarSearch` from Filament now triggers a re-run of the search after save, clearing previous images and repopulating them using the updated filters so admins can quickly "search again" when results are wrong.
-  - Relation manager shows images per search; a separate `Car Images` listing is available in the navigation. Both views provide per-row and bulk **Delete** actions so admins can clean up incorrect images.
-  - `ViewCarSearch` exposes a **Refresh from Wikimedia** header action that removes existing images for the search, clears cached Wikimedia responses for its years, and re-runs the search synchronously with the latest filters.
-  - Both Car Searches and Car Images tables default to **100 rows per page** with adjustable pagination options.
+  - Complete, and extended beyond section 7.
+  - `CarSearchResource` handles ad-hoc searches. Its Create page is the "Car Image Search" form, with:
+    - linked make and model selects
+    - a year range, normalized if entered in reverse
+    - **All ...** options for model, color and transmission, stored as `null` and shown as `All` in both tables
+    - a transparent flag and an images-per-year field
+  - Submitting the form reuses an identical completed search or runs a new one synchronously. Editing a search re-runs it with the new filters. The View page's **Refresh from Wikimedia** clears that search's cached category listings, then deletes and refetches its images in one transaction.
+  - `CarImageResource` and a search's images relation manager offer thumbnails, filters, a preview modal, single download, **Download selected** as a ZIP, and delete. Row actions sit in one dropdown on every image table.
+  - `CarMakeResource` maintains the makes and models behind the search dropdowns, and `UserResource` manages admin accounts.
+  - The CSV pipeline adds `CsvImportResource` (Upload CSV), `SearchQueryResource` (imported searches, with a Coverage filter and Run / Run Selected / Run all pending) and the `Results` page (coverage panel, make/year/review badges, exports). See [README → CSV bulk pipeline](README.md#csv-bulk-pipeline).
+  - `ErrorEventResource` shows the pipeline error log. Four landing-page widgets show pipeline health, search throughput, errors by context and the latest failures.
+  - Car Searches and Car Images tables default to 100 rows per page.
 
 - **Phase 5 – Download & Export**
-  - Partially implemented. Single-image downloads are available from the preview modal via an internal download endpoint that streams the provider image and marks `download_status` as `downloaded`, and a bulk **Download selected** ZIP action streams selected images directly to the admin's browser. Disk-backed bulk downloads via `DownloadCarImagesJob` and CSV export actions from Filament are still pending.
+  - Mostly complete, except that nothing is saved to disk yet.
+  - Single image: `GET /car-images/{carImage}/download` (authenticated) streams the provider image and marks it `downloaded`.
+  - **Download selected** on Car Images and on a search's images builds a ZIP through `CarImageZipService`.
+  - The Results page offers **Download Selected as ZIP**, **Download Confirmed as ZIP** and **Export Selected as CSV**. ZIP images are resized locally with GD (1600 px wide, JPEG quality 82) and given deterministic filenames, at most 100 per archive. The CSV's `Filename` column matches the ZIP entries.
+  - Signed URLs exist for the API only. `POST /api/v1/exports` mints a signed link to `/exports/download` that expires after 5 minutes, and a ZIP link works only once. Panel downloads stream to the logged-in browser and need no signed link.
+  - Not done: nothing writes to the `cars` disk. Only `DownloadCarImagesJob` sets `download_path`, and it is never dispatched, so `CarImageZipService`'s use-the-saved-copy branch never runs in practice. The CSV's columns (Year, Make, Model, Transmission, Filename, SourceUrl, SearchId, ImageId) also differ from the license / attribution / local-path set that section 6 proposed.
 
 - **Phase 6 – Hardening**
-  - Partially planned but not implemented. Retries, basic validation, and caching exist, but rate limiting, logging/metrics, and automated tests are still to be added.
+  - Largely complete. The gaps: there are no roles, and requests to Wikimedia are paced rather than rate-limited.
+  - Validation: every API entry point has a Form Request. CSV uploads are checked for the required columns, plausible years, file size (5 MB), unique queries (1,000) and projected image downloads (5,000).
+  - Rate limiting:
+    - Every `/api/v1` route names its own throttle: 5/min for login; 10/min for search, run-chunk, import and export; 60/min for the other writes; 120/min for reads.
+    - Toward Wikimedia there is no `RateLimiter` as section 9 proposed. Instead, a 1-second pause between bulk queries, `maxlag`, retries with backoff and response caching keep the request rate polite. A block halts the bulk run and is recorded in `wikimedia_block_events`.
+  - Logging and errors: `ErrorEventLogger` writes `error_events`, kept for 30 days and capped at 500 per import. Old events are pruned by hand with `error-events:prune`, because there is no cron. The Error Events resource and the health widgets display them, and a Wikimedia block raises a persistent notification. There are no custom error pages.
+  - Authorization: any authenticated user can use the panel, because the three policies allow every authenticated user. The role split in section 7.2 has not been built. API tokens carry scoped Sanctum abilities: `search:read`, `search:write`, `search:run`, `review:write`, `imports:read`, `imports:write`, `exports:read` and `errors:read`.
+  - Tests: 363 PHPUnit tests in 57 files (7 unit, 50 feature) and 182 Jest tests in 31 suites, all passing on 2026-10-20. `ContractFixturesTest` generates the JSON fixtures in `mobile/src/api/__fixtures__/` that the app's Zod schemas are tested against, so renaming an API field fails both suites.
+  - CI/CD:
+    - [`ci-cd.yml`](.github/workflows/ci-cd.yml) validates `composer.json`, checks platform requirements, and runs Pint, PHPUnit and `composer audit`. When those pass on `main`, it deploys to SiteGround; pushes that touch only docs skip the deploy.
+    - [`mobile.yml`](.github/workflows/mobile.yml) typechecks, lints, runs Jest, exports the web build, checks the Netlify rewrites, and publishes to Netlify from `main`.
+  - Documentation: `README.md`, `DEPLOYMENT.md`, [`docs/netlify-deploy.md`](docs/netlify-deploy.md), and a spec and plan for each feature under [`docs/superpowers/`](docs/superpowers/).
+
+- **Shipped outside the original phases**
+  - The CSV bulk pipeline: import a vehicle list, run its searches in chunks, review the results and export them.
+  - A Docker stack that mirrors the SiteGround host.
+  - The `/api/v1` JSON API and the Expo app (0.10.0, 2026-09-09), since extended with CSV imports, bulk runs, signed exports, the make catalogue and health series. See section 2.
+  - Continuous deployment to SiteGround and Netlify.
+  - A human review verdict (`review_status`), recorded alongside the machine's `make_confirmed` and `year_confirmed`.
+
+- **Still open** (matches [README → Roadmap](README.md#roadmap))
+  - Run bulk search and bulk download on a queue worker, which would lift the synchronous caps.
+  - Save downloads and exports to the `cars` disk.
+  - Build the Android APK from a tagged release.
+  - AI-assisted filtering (section 13).
 
 ---
 
 ## 13. Optional AI-based filtering (future)
+
+> **Note (2026-10-20):** `WikimediaClient::isCarImage()` and its keyword filter were removed on 2026-08-31 along with full-text search, because reading by category made them unnecessary. What remains is a MIME check, the exact-year title match and the `make_confirmed` flag. The pattern below predates that change.
 
 - **When OpenAI might make sense**
   - Consider integrating OpenAI (or a similar model) only if:
