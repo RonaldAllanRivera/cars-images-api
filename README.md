@@ -2,7 +2,7 @@
 
 A Laravel 13 + Filament 5 application that searches, filters, reviews, and bulk-exports car photography from **Wikimedia Commons** — one vehicle at a time, or thousands of rows from a CSV.
 
-A versioned **`/api/v1` JSON API** and an **Expo (React Native) client** put the same pipeline on a phone and in the browser: run a search, browse a run, work a review queue, and read pipeline health without opening the admin panel.
+A versioned **`/api/v1` JSON API** and an **Expo (React Native) client** put the same pipeline on a phone and in the browser: run a search, browse runs and the image library, run a CSV import's searches, work a review queue, and read pipeline health without opening the admin panel. On a phone you can also upload a CSV and export the library.
 
 ![PHP](https://img.shields.io/badge/PHP-8.3%2B-777BB4?logo=php&logoColor=white)
 ![Laravel](https://img.shields.io/badge/Laravel-13.x-FF2D20?logo=laravel&logoColor=white)
@@ -12,7 +12,7 @@ A versioned **`/api/v1` JSON API** and an **Expo (React Native) client** put the
 ![React Native](https://img.shields.io/badge/React%20Native-0.86-61DAFB?logo=react&logoColor=black)
 [![CI / Deploy](https://github.com/RonaldAllanRivera/cars-images-api/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/RonaldAllanRivera/cars-images-api/actions/workflows/ci-cd.yml)
 [![Mobile CI](https://github.com/RonaldAllanRivera/cars-images-api/actions/workflows/mobile.yml/badge.svg)](https://github.com/RonaldAllanRivera/cars-images-api/actions/workflows/mobile.yml)
-![Tests](https://img.shields.io/badge/tests-267%20PHP%20%2B%2060%20mobile-informational)
+![Tests](https://img.shields.io/badge/tests-363%20PHP%20%2B%20182%20mobile-informational)
 
 ---
 
@@ -68,8 +68,9 @@ flowchart TB
         direction TB
         IMP["CsvQueryImporter<br/>parse - dedupe - cap"]
         ACT["RunSearchQueryAction<br/>status + block logging"]
-        SVC["CarImageSearchService<br/>multi-year orchestration"]
-        WMC["WikimediaClient<br/>query - cache - filter"]
+        SVC["CarImageSearchService<br/>exact-year selection"]
+        LOC["CommonsCategoryLocator<br/>make + model to category"]
+        WMC["WikimediaClient<br/>category files - cache"]
         EXP["BatchZipBuilder + ImageResizer<br/>BatchCsvExporter + FilenameBuilder"]
     end
 
@@ -79,6 +80,7 @@ flowchart TB
         T1[("car_searches")]
         T2[("car_images")]
         T4[("wikimedia_block_events")]
+        T5[("commons_category_lookups")]
     end
 
     WM(["Wikimedia Commons API"])
@@ -90,6 +92,9 @@ flowchart TB
     P2 --> ACT
     P4 --> SVC
     ACT --> SVC
+    SVC --> LOC
+    LOC --> T5
+    LOC --> WMC
     SVC --> WMC
     WMC --> WM
     WM --> WMC
@@ -108,16 +113,15 @@ The two entry points share one engine. An **ad-hoc search** (`car_searches` with
 
 ### Search and harvesting
 
-- Query Wikimedia Commons by **make, model, year range, color, transmission**, and transparent background — one API request per year in the range.
-- **Linked make/model dropdowns** driven by a curated catalogue, with `All models` / `All colors` / `All transmissions` options to widen a search.
-- **Result caching and reuse.** Searches persist to `car_searches`; an identical completed search reuses its stored images instead of calling Wikimedia again.
-- **Year-relaxation fallback.** When a year-specific query returns nothing, it retries once without the year, so sparsely documented models still return results.
-- **Non-car and non-image filtering.** Wikimedia's `File:` namespace also holds PDFs, DjVu documents, botanical photos and journal figures; these are dropped by MIME type and by a title/description/category heuristic.
+- **Search by Commons category, not by keyword.** Make and model resolve to the Wikimedia Commons category that holds that model's photographs. For each year in the range, the search keeps only files whose title names that year. One category read serves every year of a search.
+- **Linked make/model dropdowns** driven by a curated catalogue. A model is required to find a category, so a search left on `All models` completes with no images.
+- **Color, transmission and transparent background are recorded, not searched.** They are stored on the search (transmission is carried into the CSV manifest) but do not narrow what is fetched.
+- **Result caching and reuse.** A resolved category is stored in `commons_category_lookups` and kept; a failed lookup is retried after 30 days. Category listings are cached for an hour, and an identical completed search reuses its stored images instead of calling Wikimedia again.
+- **Non-image filtering.** Commons categories also hold PDFs, DjVu scans and other non-image files. Anything whose MIME type is not `image/*` is dropped.
 
 ### Review
 
-- **Off-make rejection, then flagging.** Wikimedia's full-text search matches loosely — querying an `Acura CL` returns `Honda Accord CL3` photographs, because the Accord's chassis code contains the model token. Images that plainly name a *different* manufacturer are therefore rejected outright and never stored. What survives is recorded as **Confirmed / Not confirmed** against the searched make and shown as a badge with a filter, so genuinely ambiguous results still reach a human rather than being silently trusted.
-- **Badge engineering is preserved.** Some Acuras are legitimately catalogued by Wikimedia under Honda. A page naming *both* makes is kept, because it really is the searched car.
+- **Make confirmation guards against a mis-resolved category.** Categories are curated by people, so the keyword filters and off-make rejection that full-text search needed were removed with it. `MakeRelevanceChecker` still records whether the searched make appears in an image's title, description or categories, shown as a **Confirmed / Not confirmed** badge with a filter. It is a cheap check against a category such as BMW Alpina's, whose tree holds more than the searched make.
 - **A human verdict recorded beside the machine's.** `review_status` (approve / reject) is a separate column from `make_confirmed` and `year_confirmed`, so a reviewer's judgement and `MakeRelevanceChecker`'s stay comparable rather than overwriting one another. Both show on the Results table, and the mobile Review tab works the queue of images no human has ruled on yet.
 - Sortable, searchable tables with thumbnails, live-polling status badges, preview modals, and per-row or bulk delete.
 
@@ -142,14 +146,20 @@ The two entry points share one engine. An **ad-hoc search** (`car_searches` with
 
 A versioned JSON API under `/api/v1` exposes the pipeline to clients other than the admin panel. It is what the Expo app talks to, and it is versioned from its first commit — a breaking change ships as `/v2` beside it rather than in place.
 
-**Authentication** is a Sanctum bearer token. `POST /auth/login` exchanges credentials for a token carrying four scoped abilities:
+**Authentication** is a Sanctum bearer token. `POST /auth/login` exchanges credentials for a token carrying the abilities the client asks for, from these eight:
 
 | Ability | Grants |
 | --- | --- |
-| `search:read` | list and show images, searches, and a search's images |
-| `search:write` | run an ad-hoc search |
+| `search:read` | list, show and count images; list and show searches and a search's images; the make/model catalogue |
+| `search:write` | run one ad-hoc search |
+| `search:run` | run the next chunk of a CSV import's queued searches |
 | `review:write` | record an approve / reject verdict |
-| `errors:read` | pipeline health summary and the error log |
+| `imports:read` | list and show CSV imports with their coverage |
+| `imports:write` | upload a CSV |
+| `exports:read` | mint a signed CSV or ZIP export link |
+| `errors:read` | pipeline health summary, daily series, and the error log |
+
+A client that asks for nothing gets `search:read`, `search:write`, `review:write` and `errors:read`, the four that existed before scoping, so an older client keeps exactly what it had. `search:run`, `imports:read`, `imports:write` and `exports:read` are issued only when asked for by name. The server intersects the request with the eight rather than widening it. The mobile web build asks for six and leaves out `imports:write` and `exports:read`, because its token lives in `localStorage`; the native build asks for all eight.
 
 The abilities are constants, so a typo in a route is a fatal error rather than a silent 403.
 
@@ -158,18 +168,25 @@ The abilities are constants, so a typo in a route is a fatal error rather than a
 | `POST` | `/auth/login` | 5 req/min — the only route the open internet reaches |
 | `POST` | `/auth/logout` | revokes the calling token |
 | `GET` | `/auth/me` | the authenticated user |
-| `GET` | `/images`, `/images/{image}` | cursor-paginated, filterable |
-| `GET` | `/searches`, `/searches/{search}` | search runs |
+| `GET` | `/images`, `/images/{image}`, `/images/count` | cursor-paginated; filter by make, model, year, verdicts, download status and CSV import |
+| `GET` | `/searches`, `/searches/{search}` | search runs; filter by status, source (`csv` / `adhoc`), import and coverage |
 | `GET` | `/searches/{search}/images` | a run's images |
+| `GET` | `/makes` | the make/model catalogue, for suggestions |
 | `POST` | `/searches` | 10 req/min — runs the search inline |
+| `GET` | `/imports`, `/imports/{import}` | CSV imports with their coverage |
+| `POST` | `/imports` | 10 req/min — upload a CSV |
+| `POST` | `/searches/run-chunk` | 10 req/min — runs one bounded chunk of an import's searches |
+| `POST` | `/exports` | 10 req/min — mints a signed link to a CSV or ZIP of the filtered images |
 | `PATCH` | `/images/{image}/review` | the human verdict |
-| `GET` | `/health/summary`, `/errors` | pipeline health and failures |
+| `GET` | `/health/summary`, `/health/series`, `/errors` | pipeline health, daily series, and failures |
 
-Three details are worth knowing before building against it:
+Four details are worth knowing before building against it:
 
-**Every rate limit is named on its route**, not inherited from the middleware group. Login is the tightest at 5/min because it is unauthenticated; `POST /searches` is next at 10/min because it reaches Wikimedia, which has blocked this application before.
+**Every rate limit is named on its route**, not inherited from the middleware group. Login is the tightest at 5/min because it is unauthenticated. The routes that reach Wikimedia or create work (`POST /searches`, `/searches/run-chunk`, `/imports` and `/exports`) are next at 10/min, because Wikimedia has blocked this application before.
 
 **`POST /searches` is capped tighter than the admin panel.** There is no queue worker on shared hosting, so the search runs inside the HTTP request and has to finish inside `max_execution_time`. `API_SEARCH_MAX_YEAR_SPAN` (3) and `API_SEARCH_MAX_IMAGES_PER_YEAR` (5) bound what one call may ask for; a search too large for the API is still available from the panel. It answers `201`, `200`, `503` or `502` with a real search row in every case — a `503` means Wikimedia blocked the run, and the row records that.
+
+**Export links are signed, short-lived, and single-use for ZIPs.** `POST /exports` returns a link to `GET /exports/download`, a web route outside `/api/v1`, because the app opens it in the system browser, which sends no bearer token. The signature is the credential, so the link expires after five minutes, and a ZIP link stops working after its first use, because replaying one costs up to a hundred Wikimedia fetches. A ZIP is refused above 100 matching images; a CSV has no cap because it fetches nothing.
 
 **CORS allows only the configured browser origin.** `CORS_ALLOWED_ORIGINS` is empty by default. The web build of the mobile app is the only browser that should reach `api/*`; the native build sends no `Origin` header and is unaffected. **If the deployed web origin is not listed there, the browser blocks every request and sign-in fails silently.**
 
@@ -177,23 +194,25 @@ Three details are worth knowing before building against it:
 
 ## Mobile client
 
-An Expo app under [`mobile/`](mobile/) — four tabs, TypeScript throughout, talking to `/api/v1`.
+An Expo app under [`mobile/`](mobile/) — five tabs, TypeScript throughout, talking to `/api/v1`.
 
 | Tab | What it does |
 | --- | --- |
-| **Search** | run an ad-hoc search against Wikimedia and page through the results |
-| **Runs** | browse past search runs and open a run's images |
+| **Search** | run an ad-hoc search, with makes and models suggested from the catalogue; browse past runs and open a run's images |
+| **Library** | every harvested image, filtered like the panel's Results page; on native, export the filtered set as a CSV or ZIP |
+| **Pipeline** | CSV imports and their coverage, and running an import's queued searches; on native, upload a CSV |
 | **Review** | work the queue of images no human has ruled on, approving or rejecting |
-| **Health** | the pipeline health summary and the error log |
+| **Health** | the pipeline health summary, daily throughput, failures by kind, and the error log |
 
 ```mermaid
 flowchart LR
     subgraph App["Expo app - mobile/"]
         direction TB
         T1["Search"]
-        T2["Runs"]
-        T3["Review"]
-        T4["Health"]
+        T2["Library"]
+        T3["Pipeline"]
+        T4["Review"]
+        T5["Health"]
     end
 
     subgraph Client["src/api"]
@@ -217,6 +236,7 @@ flowchart LR
     T2 --> RQ
     T3 --> RQ
     T4 --> RQ
+    T5 --> RQ
     RQ --> AC
     AC --> ZD
     TS --> AC
@@ -242,7 +262,7 @@ npm run web               # or: npm start, npm run android
 ```bash
 npm run typecheck   # tsc --noEmit
 npm run lint
-npm test            # 60 tests, 13 suites
+npm test            # 182 tests, 31 suites
 npm run build:web   # expo export -p web  ->  dist/
 ```
 
@@ -274,9 +294,10 @@ The capture freezes the clock and normalises the token to a placeholder, so a fi
 
 The build runs in GitHub Actions, **not** on Netlify, and the Git repository is deliberately not linked to the Netlify site: one build of record rather than two that can disagree. The workflow typechecks, lints, tests and exports on every push and pull request touching `mobile/**`, then publishes `dist/` with the Netlify CLI when `MOBILE_DEPLOY_ENABLED` is `true`.
 
-Two things in [`mobile/netlify.toml`](mobile/netlify.toml) are worth reading before editing it:
+Three things about [`mobile/netlify.toml`](mobile/netlify.toml) are worth knowing before editing it:
 
-- **The rewrites are specific, not a catch-all.** A static export keeps Expo Router's filename verbatim, so `/runs/42` lives on disk as `dist/runs/[id].html` and a shared link would otherwise 404. Three ordered 200-rewrites map them (`/runs/image/:id` before `/runs/:id` — the more specific pattern has to match first). Because they are not a catch-all, an existing file still wins and a genuinely unknown path still 404s instead of being handed an app shell.
+- **The rewrites are specific, not a catch-all.** A static export keeps Expo Router's filename verbatim, so `/library/42` lives on disk as `dist/library/[id].html` and a shared link would otherwise 404. Four ordered 200-rewrites map them (`/pipeline/:id`, `/search/runs/:id`, `/search/:id`, `/library/:id` — the deeper `/search/runs/:id` is listed before `/search/:id`). Because they are not a catch-all, an existing file still wins and a genuinely unknown path still 404s instead of being handed an app shell.
+- **The rewrites are checked against the router.** The list is maintained by hand, and the tab restructure once left `/runs/:id` pointing at a deleted page while `/library/:id` 404'd in production for three days — clicking through inside the app still worked, so only a hard navigation showed it. `npm run check:redirects` (`scripts/check-netlify-redirects.mjs`) now fails the CI build when the rewrites and the exported routes disagree.
 - **The CSP pins a script hash instead of allowing `'unsafe-inline'`.** The export emits exactly one inline script — the stable one-liner `globalThis.__EXPO_ROUTER_HYDRATE__=true;` — so it is hashed and every other inline script stays blocked. If a future Expo version changes that snippet the hash goes stale and the page client-renders instead of hydrating; recompute it from the emitted HTML rather than reaching for `'unsafe-inline'`.
 
 `EXPO_PUBLIC_API_URL` is inlined into the bundle at build time — there is no runtime config file, so a deployed build cannot be pointed at the wrong backend by accident, and changing the variable requires a rebuild. That is why the deploy job accepts `workflow_dispatch`: no push touches `mobile/**` just because the API moved, and without a manual trigger the only way to republish would be an empty commit.
@@ -291,17 +312,17 @@ Two things in [`mobile/netlify.toml`](mobile/netlify.toml) are worth reading bef
 
 The parts of this project worth reading are the ones that exist because the obvious approach did not survive contact with the real API.
 
-**Wikimedia rate-limit etiquette is built in, not bolted on.** Requests send a descriptive, contactable `User-Agent` (Wikimedia's UA policy rejects generic ones with 429/403), set `maxlag=5` so the app backs off when replication lags, cache for 24 hours, pause one second between bulk queries, and retry transient failures with exponential backoff. A 429/403/503 raises a typed `WikimediaBlockedException`, is persisted to `wikimedia_block_events`, and **halts the bulk loop** — the failure mode of a harvesting tool should never be to keep hammering.
+**Category membership replaced full-text search.** Wikimedia's full-text index matches loosely: an `Acura CL` query returned `Honda Accord CL3` photographs, because the Accord's chassis code contains the model token. Every fix for that (keyword filters, off-make rejection, a retry without the year) cleaned up after the search instead of removing the cause. A search now resolves make and model to a Commons category, which people curate, reads the whole category, and keeps the files whose title names the year. The order matters: whole category, then the year filter, then the limit. `Category:Cadillac STS` holds 56 files, of which 6 name 2005, so applying the limit to the fetch would hand the year filter an arbitrary ten files and find none of them.
+
+**Wikimedia rate-limit etiquette is built in, not bolted on.** Requests send a descriptive, contactable `User-Agent` (Wikimedia's UA policy rejects generic ones with 429/403), set `maxlag=5` so the app backs off when replication lags, cache category listings for an hour and resolved categories indefinitely, pause one second between bulk queries, and retry transient failures with exponential backoff. A 429/403/503 raises a typed `WikimediaBlockedException`, is persisted to `wikimedia_block_events`, and **halts the bulk loop** — the failure mode of a harvesting tool should never be to keep hammering.
 
 **Thumbnails are generated locally because the CDN refuses.** The first implementation requested Wikimedia's `/thumb/` URLs. Those return HTTP 400 when requested from datacenter and shared-hosting IPs, so it worked in development and failed in production. The fix was to download the original and resize with GD (`ImageResizer`, default 1600px max width, JPEG re-encode) — roughly an 85% size reduction, and host-independent. Unsupported formats fall through with the original bytes intact, so an image is never lost from an archive.
 
-**CSV model strings are normalized before querying.** Vehicle data encodes models as engine displacement plus trim (`2.2CL/3.0CL`); Wikimedia catalogues the bare model (`CL`). `ModelSearchTermNormalizer` strips the displacement prefix and collapses slash-separated variants, but keeps the original whenever stripping would leave too little to search on.
+**CSV model strings are normalized before a category is resolved.** Vehicle data encodes models as engine displacement plus trim (`2.2CL/3.0CL`); Wikimedia catalogues the bare model (`CL`). `ModelSearchTermNormalizer` strips the displacement prefix and collapses slash-separated variants, but keeps the original whenever stripping would leave too little to search on. It is the first step of `CommonsCategoryResolver`.
 
-**Transmission is deliberately dropped from CSV-driven queries.** Image pages never say "Automatic 4-spd", so including it returned zero results across the board. It is kept as manifest metadata; ad-hoc searches, where the user typed it on purpose, still use it.
+**Transmission and color are recorded, not searched.** Image pages never say "Automatic 4-spd", and a category holds a model's photographs whatever the gearbox or paint, so neither narrows what is fetched. Both stay on the search, and transmission is carried into the CSV manifest.
 
-**Off-make results are flagged, not filtered.** Badge-engineered and region-specific models are catalogued under a different marque — an Acura CL is filed as a Honda Accord. Auto-rejecting those would throw away correct photographs of the right car; auto-accepting them hides a real data quirk. `MakeRelevanceChecker` marks the discrepancy and lets the reviewer decide.
-
-**Synchronous work is capped rather than left to time out.** Bulk runs stop at 50 queries or 50 seconds per click and bulk ZIPs at 100 images, because both are built inside a single web request on shared hosting. Each cap is a config value with an explicit reason in `config/cars-images.php`, and the UI tells the user to click again rather than dying at the gateway timeout.
+**Synchronous work is capped rather than left to time out.** A bulk run is driven by the browser: a click queues the selection, and each Livewire poll runs one chunk of at most 50 queries or about 10 seconds, so no single request gets near the gateway timeout. Closing the tab stops the run, and **Run all pending** resumes it. Bulk ZIPs stop at 100 images because they are built inside a single web request on shared hosting. Each cap is a config value with an explicit reason in `config/cars-images.php`.
 
 **Failure paths are explicit.** A per-image fetch failure skips that image instead of aborting the archive; an archive where everything failed reports it instead of serving a zero-entry ZIP; a search that throws is forced to `failed` even though its status update was inside the rolled-back transaction. A refresh deletes and refetches inside **one** transaction, so a rate-limited Wikimedia cannot leave a search stripped of the images it was replacing.
 
@@ -334,7 +355,7 @@ The parts of this project worth reading are the ones that exist because the obvi
 | Mobile tests | Jest 29 + `@testing-library/react-native` |
 | Web hosting (app) | Netlify, static export published from GitHub Actions |
 
-> **Currently on the latest release of every major dependency** — Laravel 13.26, Filament 5.7, Livewire 4.4, PHPUnit 12. The upgrade was executed in verified stages; the plan, compatibility matrix, per-stage gates, and the issues it surfaced are recorded in [`docs/upgrades/2026-08-24-laravel-13-filament-5-upgrade.md`](docs/upgrades/2026-08-24-laravel-13-filament-5-upgrade.md).
+> **On the current major of every dependency** — Laravel 13.36, Filament 5.10, Livewire 4.4, PHPUnit 12.5 as of 2026-10-20, when `composer outdated --direct` listed no new major releases. The upgrade was executed in verified stages; the plan, compatibility matrix, per-stage gates, and the issues it surfaced are recorded in [`docs/upgrades/2026-08-24-laravel-13-filament-5-upgrade.md`](docs/upgrades/2026-08-24-laravel-13-filament-5-upgrade.md).
 
 ---
 
@@ -400,12 +421,15 @@ Wikimedia integration lives in `config/images.php`; all application limits live 
 | `WIKIMEDIA_TIMEOUT` | `10` | Per-request timeout (seconds) |
 | `WIKIMEDIA_RETRY_TIMES` | `3` | Retry attempts for transient errors |
 | `WIKIMEDIA_RETRY_SLEEP_MS` | `200` | Backoff base; doubles per attempt |
-| `WIKIMEDIA_CACHE_TTL` | `3600` | Search-result cache lifetime (seconds) |
+| `WIKIMEDIA_CACHE_TTL` | `3600` | Category-listing cache lifetime (seconds) |
 | `WIKIMEDIA_MAXLAG` | `5` | MediaWiki `maxlag` courtesy parameter |
+| `WIKIMEDIA_CATEGORY_MISS_TTL_DAYS` | `30` | Days before a model with no category is looked up again |
+| `WIKIMEDIA_CATEGORY_MAX_FILES` | `500` | Most files read from one category |
+| `WIKIMEDIA_CATEGORY_PAGE_SIZE` | `200` | Files per category request |
 | `CSV_IMPORT_MAX_COMBOS` | `1000` | Reject an upload above this many unique queries |
 | `CSV_IMPORT_DEFAULT_IMAGES_PER_YEAR` | `5` | Images requested per imported query |
-| `CARS_BULK_RUN_MAX_QUERIES` | `50` | Queries per bulk-run click |
-| `CARS_BULK_RUN_MAX_SECONDS` | `50` | Wall-clock ceiling per bulk-run click |
+| `CARS_BULK_RUN_MAX_QUERIES` | `50` | Queries per bulk-run chunk |
+| `CARS_BULK_RUN_AUTO_CHUNK_SECONDS` | `10` | Wall-clock budget per bulk-run chunk (one poll, or one `run-chunk` call) |
 | `CARS_BULK_RUN_SLEEP_SECONDS` | `1` | Pause between bulk queries |
 | `CARS_DOWNLOAD_MAX_WIDTH` | `1600` | Max width for ZIP images (resized locally) |
 | `CARS_DOWNLOAD_JPEG_QUALITY` | `82` | JPEG quality for resized images |
@@ -444,15 +468,15 @@ Acura,2.2CL/3.0CL,1998,Manual 5-spd
 
 **2. Search Queries** (`/admin/search-queries`)
 
-Review the imported queries, then **Run** a single row or select many and **Run Selected**. Bulk runs process up to `CARS_BULK_RUN_MAX_QUERIES` queries or `CARS_BULK_RUN_MAX_SECONDS` seconds per click — click again to continue. A Wikimedia block pauses the run, raises a persistent notification, and records the event.
+Review the imported queries, then **Run** a single row, select many and **Run Selected**, or use **Run all pending** to queue every pending or failed search the current filters select. The page then works through the queue itself, one chunk per poll (`CARS_BULK_RUN_MAX_QUERIES` queries or `CARS_BULK_RUN_AUTO_CHUNK_SECONDS` seconds). Closing the tab stops the run, and **Run all pending** picks up where it left off. The **Coverage** filter separates searches that found images, ran and found nothing, and have not run yet. A Wikimedia block pauses the run, raises a persistent notification, and records the event.
 
 **3. Results** (`/admin/results`)
 
-Browse the harvested images, filter by source CSV or by **Make match**, then export the selection as a ZIP, a confirmed-only ZIP, or a CSV manifest.
+Browse the harvested images, filter by source CSV or by **Make match**, then export the selection as a ZIP, a confirmed-only ZIP, or a CSV manifest. A coverage panel counts the searches behind the images (run, found images, ran and found nothing, not run yet), so a half-searched import does not look finished.
 
 ### Ad-hoc search
 
-**Cars → Car Image Searches → Create.** Pick a make (the model list follows it), set a year range — reversed ranges are normalized — and optionally a color, transmission, or transparent-background toggle. The search runs synchronously and redirects to its view page, where the **Images** relation holds the results.
+**Cars → Car Image Searches → Create.** Pick a make and a model (the model list follows the make) and set a year range — reversed ranges are normalized. The model is what resolves a Commons category, so a search left on **All models** completes with no images. Color, transmission and transparent background are recorded on the search but do not narrow the results. The search runs synchronously and redirects to its view page, where the **Images** relation holds the results.
 
 From that view page, **Refresh from Wikimedia** deletes the search's images, clears the cached responses for its years, and re-runs with the current filters. Editing the search instead re-runs it with the *new* filters.
 
@@ -470,7 +494,7 @@ php artisan test --testsuite=Unit       # fast, no database
 php artisan test --filter=BatchZipBuilder
 ```
 
-267 tests across 48 files: 56 unit tests over the pure helpers (filename building, image resizing, make relevance and off-make rejection, model normalization) and 211 feature tests over the CSV importer, ZIP/CSV export, Wikimedia block handling and recall fallback, resource scoping, off-make filtering, the Results page bulk actions, the error-log instrumentation and its widgets, every `/api/v1` endpoint with its abilities and rate limits, a smoke test that mounts **every** page in the panel, the registered record/bulk actions on every table, the CSV upload driven through the Filament form itself, and the ad-hoc search form's `All ...` sentinel round-trip.
+363 tests across 57 files: 56 unit tests over the pure helpers (filename building, image resizing, category resolution, make relevance, model normalization, model-year matching) and 307 feature tests over the CSV importer and import coverage, category retrieval and exact-year selection, ZIP/CSV export and signed export links, Wikimedia block handling, resource scoping, the Results page bulk actions, bulk-run chunking, the error-log instrumentation and its widgets, every `/api/v1` endpoint with its abilities and rate limits, a smoke test that mounts **every** page in the panel, the registered record/bulk actions on every table, the CSV upload driven through the Filament form itself, and the ad-hoc search form's `All ...` sentinel round-trip.
 
 The last three exist as upgrade insurance, and they earned it: they carried this codebase through Laravel 12→13 and Filament 4→5 (Livewire 3→4) with no behavioural regressions. A major release typically breaks an application by renaming a builder method, which leaves the resource compiling but the page throwing on mount — `PanelSmokeTest` turns that into a failing test rather than a support ticket, and `TableActionsTest` catches the subtler case where a page still renders but has quietly lost its buttons.
 
@@ -484,7 +508,7 @@ Because the comparison is byte-for-byte, every source of nondeterminism has to b
 UPDATE_CONTRACT_FIXTURES=1 php artisan test --filter=ContractFixturesTest
 ```
 
-The mobile app has its own suite — 60 tests across 13 files, covering the API client's error and 401 handling, the Zod schemas against those fixtures, the token store on both platforms, the auth context and route guard, the optimistic review mutation and its cache predicate, the infinite grid, and the search and health screens:
+The mobile app has its own suite — 182 tests across 31 files, covering the API client's error and 401 handling, the Zod schemas against those fixtures, the token store on both platforms, the auth context, ability gating and route guard, the optimistic review mutation and its cache predicate, the CSV upload and bulk-run hooks, the coverage, export and run-progress panels, the make/model suggestions, the charts, the infinite grid, and the search and health screens:
 
 ```bash
 cd mobile
@@ -548,20 +572,21 @@ app/
 │   ├── Resources/       CsvImport, SearchQuery, CarSearch, CarImage, CarMake, ErrorEvent, User
 │   └── Widgets/         PipelineHealthOverview, SearchThroughputChart, ErrorsByContextChart, LatestFailuresTable
 ├── Http/
-│   ├── Controllers/     Single-image authenticated download endpoint
-│   │   └── Api/V1/      Auth, Image, Search, ReviewImage, HealthSummary, Error
+│   ├── Controllers/     Single-image download (authenticated) and signed export download
+│   │   └── Api/V1/      Auth, Image, Search, Make, Import, RunChunk, Export, ReviewImage, HealthSummary, HealthSeries, Error
 │   ├── Requests/Api/V1/ Validation and caps for every API entry point
 │   └── Resources/Api/V1 The JSON shapes the mobile client is pinned to
 ├── Jobs/                Queue scaffolding (not dispatched yet — see Roadmap)
-├── Models/              CarSearch, CarImage, CsvImport, CarMake, CarModel, ErrorEvent, WikimediaBlockEvent, User
-├── Policies/            CarImagePolicy, CarSearchPolicy
+├── Models/              CarSearch, CarImage, CsvImport, CarMake, CarModel, CommonsCategoryLookup, ErrorEvent, WikimediaBlockEvent, User
+├── Policies/            CarImagePolicy, CarSearchPolicy, CsvImportPolicy
 └── Services/
-    ├── Downloads/       BatchZipBuilder, BatchCsvExporter, ImageResizer, FilenameBuilder
-    ├── Health/          PipelineHealthSummary — one source for the widget and the API
-    ├── Images/          WikimediaClient, CarImageSearchService, MakeRelevanceChecker, ModelSearchTermNormalizer
-    ├── Imports/         CsvQueryImporter
+    ├── Downloads/       BatchZipBuilder, BatchCsvExporter, ExportQuery, ImageResizer, FilenameBuilder
+    ├── Health/          PipelineHealthSummary, PipelineSeries — one source for the widgets and the API
+    ├── Images/          WikimediaClient, CarImageSearchService, CommonsCategoryLocator, CommonsCategoryResolver,
+    │                    ModelYearMatcher, MakeRelevanceChecker, ModelSearchTermNormalizer, CarImageZipService
+    ├── Imports/         CsvQueryImporter, ImportCoverage
     ├── Logging/         ErrorEventLogger
-    └── Search/          RunSearchQueryAction
+    └── Search/          RunSearchQueryAction, RunChunkAction
 config/
 ├── cars-images.php      Import caps, bulk-run pacing, download sizing, API caps, error log
 ├── cors.php             Which browser origins may call api/*
@@ -571,12 +596,15 @@ routes/api.php           /api/v1 — versioned from the first commit
 mobile/                  The Expo app — its own package.json, lockfile and CI
 ├── app/                 Expo Router routes; (app)/ sits behind the auth guard
 ├── src/api/             client.ts, schemas.ts, queryKeys.ts, hooks/, __fixtures__/
-├── src/auth/            AuthContext, TokenStore (SecureStore | localStorage)
-├── src/ui/              Screen, InfiniteGrid, ImageCard, StatusBadge, ...
+├── src/auth/            AuthContext, TokenStore (SecureStore | localStorage), useCan
+├── src/theme/           Design tokens, shared with the Tailwind config
+├── src/ui/              Screen, InfiniteGrid, ImageCard, ReviewCard, ExportPanel, charts/, ...
+├── scripts/             check-netlify-redirects.mjs — fails CI when rewrites and routes disagree
 └── netlify.toml         Publish directory, route rewrites, CSP
 docs/                    Design specs and implementation plans per feature
 ├── netlify-deploy.md    One-time Netlify setup and its failure modes
-└── superpowers/         Per-feature specs and plans
+├── superpowers/         Per-feature specs and plans
+└── upgrades/            The Laravel 13 / Filament 5 upgrade record
 tests/{Unit,Feature}/    Mirrors the app/ layout; Feature/Api/ covers /api/v1
 ```
 
@@ -589,7 +617,7 @@ Background on the original design and decision history lives in `PLAN.md`, `CHAT
 - Ship the Android APK from a tagged build, alongside the existing web export.
 - Move bulk search and bulk download onto a queue worker, retiring the synchronous caps (`app/Jobs/` holds the scaffolding) — which would also lift the tighter caps on `POST /api/v1/searches`.
 - Persist exports to the `cars` storage disk instead of streaming them straight to the browser.
-- Replace the keyword-based non-car heuristic with AI-assisted classification for ambiguous results (see `PLAN.md`).
+- Explore AI-assisted classification for ambiguous results (see `PLAN.md`, section 13).
 
 ---
 
